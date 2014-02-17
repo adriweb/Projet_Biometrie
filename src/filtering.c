@@ -175,7 +175,7 @@ u16** apply_filter(u16** src, filter_t* filter)
 			reNormalize(imageNG);
 	}
 
-	u16** imageNG_16 = (u16**)malloc(img_w*img_h * sizeof(u16*));
+	u16** imageNG_16 = (u16**)malloc(img_h * sizeof(u16*));
 	if (!imageNG_16) return NULL;
 	for (j = 0; j < img_h; j++) {
 		imageNG_16[j] = (u16*)calloc(img_w, sizeof(u16));
@@ -212,10 +212,10 @@ void matrix_copy(int** dest, int** src, uint cols, uint rows)
 
 filter_t** createFilters()
 {
+	uint i, j, size;
+
 	filters = (filter_t**)malloc(NBR_FILTRES * sizeof(filter_t*));
 	if (!filters) return NULL;
-
-	uint i, j, size;
 
 	int tmp_LBP[3][3] = { { 1, 2, 4 }, { 8, 0, 16 }, { 32, 64, 128 } };
 

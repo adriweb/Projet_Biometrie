@@ -120,10 +120,13 @@ DonneesImageRGB* imageHistogramme(uint* histo);
 */
 int		get_seuil_otsu(u16** src);
 
-void saveBMPwithCurrentName(DonneesImageRGB * image, const char* name);
-
 void do_Seuil(int seuil);
+
 void do_PaletteReduction(int level);
+
+u16** get_subimage(u16** src, uint src_w, uint src_h, uint x, uint y, uint w, uint h);
+
+uint extract_subimages_and_save(u16** image_ng, uint img_w, uint img_h);
 
 /**
 * \brief	Initialise les données de base

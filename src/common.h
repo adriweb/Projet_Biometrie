@@ -26,8 +26,7 @@ typedef unsigned char		u8;
 typedef unsigned short int	u16;
 typedef unsigned int		uint;
 
-#define uint	unsigned int
-// Wait... wtf VS ?
+typedef u16**				img_gris;
 
 // just in case (Mac OS X doesn't have those by default, on QT Creator at least)
 #ifndef INT_MIN

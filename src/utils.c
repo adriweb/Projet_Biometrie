@@ -32,6 +32,18 @@ int array_max_idx(int* arr, int size) {
 	return idx;
 }
 
+DonneesImageRGB* new_ImageRGB(uint colonnes, uint lignes)
+{
+	DonneesImageRGB* imageRGB = (DonneesImageRGB*)malloc(sizeof(DonneesImageRGB));
+	if (!imageRGB) return NULL;
+	imageRGB->donneesRGB = (unsigned char*)malloc(colonnes * lignes * 3 * sizeof(unsigned char));
+	if (!imageRGB->donneesRGB) return NULL;
+	imageRGB->hauteurImage = lignes;
+	imageRGB->largeurImage = colonnes;
+
+	return imageRGB;
+}
+
 void saveBMPwithCurrentName(DonneesImageRGB * image, const char* name)
 {
 	secure_free(latestSavedImageName);
@@ -45,3 +57,4 @@ void saveBMPwithCurrentName(DonneesImageRGB * image, const char* name)
 
 	ecrisBMPRGB_Dans(image, latestSavedImageName);
 }
+

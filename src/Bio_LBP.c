@@ -72,7 +72,7 @@ u16** couleur2NG(u16** mat_bleue, u16** mat_rouge, u16** mat_verte, bool percept
 		coeff_g = perceptive ? 0.7154 : 1,
 		coeff_b = perceptive ? 0.0721 : 1;
 	uint divi = perceptive ? 1 : 3;
-	u16** imageNG = (u16**)malloc(img_w*img_h * sizeof(u16*));
+	u16** imageNG = (u16**)malloc(img_h * sizeof(u16*));
 	if (!imageNG) return NULL;
 	for (j = 0; j < img_h; j++) {
 		imageNG[j] = (u16*)calloc(img_w, sizeof(u16));
@@ -126,19 +126,15 @@ void histo_egalisation(u16** imageNG) {
 	secure_free(histoCumule);
 }
 
-DonneesImageRGB* imageHistogramme(uint* histo) {
-	DonneesImageRGB* imageHisto = (DonneesImageRGB*)malloc(sizeof(DonneesImageRGB));
-	if (!imageHisto) return NULL;
-
+DonneesImageRGB* imageHistogramme(uint* histo)
+{
 	int i, j;
 	uint colonnes = GRAYLEVELS, lignes = 180;
 
-	float ratio = histo[array_max_idx((int*)histo, GRAYLEVELS)] / (float)lignes;
-
-	imageHisto->donneesRGB = (unsigned char*)malloc(colonnes * lignes * 3 * sizeof(unsigned char));
-	if (!imageHisto->donneesRGB) return NULL;
+	DonneesImageRGB* imageHisto = new_ImageRGB(colonnes, lignes);
 	memset(imageHisto->donneesRGB, 255, colonnes * lignes * 3 * sizeof(unsigned char)); // fond blanc
-	imageHisto->hauteurImage = lignes;	imageHisto->largeurImage = colonnes;
+
+	float ratio = histo[array_max_idx((int*)histo, GRAYLEVELS)] / (float)lignes;
 
 	uint* histoNorm = (uint*)malloc(GRAYLEVELS*sizeof(uint));
 	if (!histoNorm) return NULL;
@@ -232,7 +228,7 @@ u16 ** paletteReduction(u16 ** src, int levelsAmount)
 	//		printf("levels[%d] = %d\n", i, levels[i]);
 
 	// reduced img init + processing
-	u16** reduced = (u16**)malloc(img_w*img_h * sizeof(u16*));
+	u16** reduced = (u16**)malloc(img_h * sizeof(u16*));
 	if (!reduced) return NULL;
 	for (j = 0; j < img_h; j++) {
 		reduced[j] = (u16*)calloc(img_w, sizeof(u16)); // will make everything mm_default (0)
@@ -270,6 +266,67 @@ void do_PaletteReduction(int level)
 }
 
 
+u16** get_subimage(u16** src, uint src_w, uint src_h, uint x, uint y, uint w, uint h)
+{
+	uint i, j;
+	u16** sub;
+
+	sub = (u16**)malloc(h * sizeof(u16*));
+	if (!sub) return NULL;
+
+	for (j = y; j < y+h; j++) {
+		sub[j-y] = (u16*)calloc(w, sizeof(u16));
+		if (!sub[j-y]) return NULL;
+		for (i = x; i < x + w; i++)
+			sub[j-y][i-x] = (j < src_h && i < src_w) ? src[j][i] : 0;
+	}
+	return sub;
+}
+
+// retourne le nombre de sous-images extraites
+uint extract_subimages_and_save(u16** image_ng, uint img_w, uint img_h)
+{
+	uint i, j, tmp, counter = 0;
+	uint nbr_sub_x = 5;
+	uint sub_size = (uint)roundf(((float)img_w / (float)nbr_sub_x)); // == width == height (square)
+	uint loop_step = sub_size >> 1; // génération d'une sous-image à chaque taille/2.
+	uint nbr_sub_y = (uint)roundf(((float)img_h / (float)sub_size));
+/*
+	img_gris** subimages_mat; // actual type : u16**** (!)
+
+	subimages_mat = (img_gris**)malloc((nbr_sub_y-1) * sizeof(img_gris*)); // -1 because last is incomplete (thus useless)
+	if (!subimages_mat) return 0;
+	for (j = 0; j < nbr_sub_y; j++) {
+		subimages_mat[j] = (img_gris*)calloc((nbr_sub_x - 1), sizeof(img_gris));
+		if (!subimages_mat[j]) return 0;
+	}
+*/
+	u16** sub = NULL;
+	char* sub_filename = NULL;
+	sub_filename = calloc(strlen(nomFichier) + 25, sizeof(char)); // +15 => "_sub_x_y_w.bmp" + extra safety
+	DonneesImageRGB* dest_imgRGB = new_ImageRGB(sub_size, sub_size);
+
+	for (j = 0; j < img_h - loop_step; j += loop_step) {
+		for (i = 0; i < img_w - loop_step; i += loop_step) {
+			error("processing sub : %d ; %d\n", j, i);
+			sub = get_subimage(image_ng, img_w, img_h, i, j, sub_size, sub_size);
+			sprintf(sub_filename, "%s_sub_%d_%d_%d.bmp", nomFichier, j, i, sub_size);
+			sauveImageNG(dest_imgRGB, sub);
+			ecrisBMPRGB_Dans(dest_imgRGB, sub_filename);
+
+			for (tmp = 0; tmp < sub_size; tmp++)
+				secure_free(sub[tmp]);
+			secure_free(sub);
+			
+			counter++;
+		}
+	}
+
+	secure_free(sub_filename);
+
+	return counter;
+}
+
 void choixAction(int choix)
 {
 	int i;
@@ -293,12 +350,12 @@ void choixAction(int choix)
 			printf("*****  v1.0 - 12/02/2014 *****\n");
 			printf("******************************\n\n");
 			printf("Image en cours : %s\n\n", nomFichier);
-			printf("* 1) LBP avec médiane \n");
-			printf("* 10) LBP sans médiane \n");
+			printf("* 1) LBP avec mediane \n");
+			printf("* 10) LBP sans mediane \n");
 			printf("* 2) Détection de visage(s) \n");
-			printf("* 3) Mdiane \n");
-			printf("* 4) Histogramme du LBP \n");
-			printf("* 5) Histogramme \n");
+			printf("* 3) Mediane \n");
+			printf("* 4) Histogramme \n");
+			printf("* 5) Extractions sous-images \n");
 			printf("* 0) Quitter \n\n");
 			printf("******************************\n");
 			printf("Choix ? \n");
@@ -336,20 +393,16 @@ void choixAction(int choix)
 		case 4:
 			cree3matrices(matrice_bleue, matrice_rouge, matrice_verte, image_orig);
 			image_ng = couleur2NG(matrice_bleue, matrice_rouge, matrice_verte, false);
-			tmp_ng1 = apply_filter(image_ng, filters[flt_Median]);
-			tmp_ng2 = apply_filter(tmp_ng1, filters[flt_LBP]);
-			histo = histogramme(tmp_ng2);
+			histo = histogramme(image_ng);
 			histo_img = imageHistogramme(histo);
-			saveBMPwithCurrentName(histo_img, "lbp_histogramme.bmp");
+			saveBMPwithCurrentName(histo_img, "histogramme.bmp");
 			secure_free(histo);
 			break;
 		case 5:
 			cree3matrices(matrice_bleue, matrice_rouge, matrice_verte, image_orig);
 			image_ng = couleur2NG(matrice_bleue, matrice_rouge, matrice_verte, false);
-			histo = histogramme(image_ng);
-			histo_img = imageHistogramme(histo);
-			saveBMPwithCurrentName(histo_img, "histogramme.bmp");
-			secure_free(histo);
+			int counter = extract_subimages_and_save(image_ng, img_w, img_h);
+			error("counter : %d\n", counter);
 			break;
 		case 0:
 			end = true;
@@ -396,7 +449,7 @@ void initData(int argc, char *argv[])
 #ifndef CONSOLE
 	error("loaded : %s\n", argv[1]);
 #endif
-	strcpy_s(nomFichier, (argc > 1) ? strlen(argv[1]) + 1 : 10, (argc > 1) ? argv[1] : "image.bmp");
+	strcpy_s(nomFichier, (argc > 1) ? strlen(argv[1]) + 1 : 14, (argc > 1) ? argv[1] : "D:\\image.bmp");
 
 	if (!strEndsWith(nomFichier, ".bmp")) {
 		printf("Image name doesn't contain the extension, adding it...\n");

@@ -52,7 +52,7 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <Image Include="src\bateau2.bmp">
+    <Image Include="src\image.bmp">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>
