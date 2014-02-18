@@ -44,17 +44,39 @@ DonneesImageRGB* new_ImageRGB(uint colonnes, uint lignes)
 	return imageRGB;
 }
 
-void saveBMPwithCurrentName(DonneesImageRGB * image, const char* name)
+void do_saveBMPwithName(DonneesImageRGB * image, const char* name, const char* suffix)
 {
 	secure_free(latestSavedImageName);
 
-	uint len = strlen(nomFichier) + strlen(name) + 2;
+	uint len = strlen(name) + strlen(suffix) + 2;
 	latestSavedImageName = (char*)calloc(len, sizeof(char));
 	if (!latestSavedImageName) exit(-1);
-	strcpy(latestSavedImageName, nomFichier);
+	strcpy(latestSavedImageName, name);
 	strcat(latestSavedImageName, "_");
-	strcat(latestSavedImageName, name);
+	strcat(latestSavedImageName, suffix);
 
 	ecrisBMPRGB_Dans(image, latestSavedImageName);
 }
 
+void saveBMPwithCurrentName(DonneesImageRGB * image, const char* name)
+{
+	do_saveBMPwithName(image, nomFichier, name);
+}
+
+void createDirectory(const char* name)
+{
+#ifdef __linux__		
+		mkdir(name, 0700);
+#else
+		_mkdir(name);
+#endif
+}
+
+void changeDirectory(const char* name)
+{
+#ifdef __linux__		
+		chdir(name);
+#else
+		_chdir(name);
+#endif
+}

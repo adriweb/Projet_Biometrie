@@ -1,6 +1,6 @@
 ﻿// Adrien Bertrand
 // Biométrie - LBP
-// v1.0 - 12/02/2014
+// v1.1 - 18/02/2014
 
 #include "Bio_LBP.h"
 #include "filtering.h"
@@ -91,16 +91,22 @@ void seuilleImageNG(u16** imageNG, uint seuil) {
 		imageNG[j][i] = (imageNG[j][i] > seuil) ? 255 : 0;
 }
 
-uint* histogramme(u16** imageNG) {
+uint* do_histogramme(u16** imageNG, uint w, uint h)
+{
+	uint i, j;
+
 	histo = (uint*)calloc(GRAYLEVELS, sizeof(uint));
 	if (!histo) return NULL;
 
-	int i, j;
-	for (j = 0; j < img_h; j++)
-	for (i = 0; i < img_w; i++)
+	for (j = 0; j < h; j++)
+	for (i = 0; i < w; i++)
 		histo[imageNG[j][i]]++;
 
 	return histo;
+}
+
+uint* histogramme(u16** imageNG) {
+	return do_histogramme(imageNG, img_w, img_h);
 }
 
 uint* histogrammeCumule(u16** imageNG) {
@@ -266,9 +272,9 @@ void do_PaletteReduction(int level)
 }
 
 
-u16** get_subimage(u16** src, uint src_w, uint src_h, uint x, uint y, uint w, uint h)
+u16** get_subimage(u16** src, int src_w, int src_h, int x, int y, int w, int h)
 {
-	uint i, j;
+	int i, j;
 	u16** sub;
 
 	sub = (u16**)malloc(h * sizeof(u16*));
@@ -276,7 +282,7 @@ u16** get_subimage(u16** src, uint src_w, uint src_h, uint x, uint y, uint w, ui
 
 	for (j = y; j < y+h; j++) {
 		sub[j-y] = (u16*)calloc(w, sizeof(u16));
-		if (!sub[j-y]) return NULL;
+		if (!sub[j-y]) exit(1);
 		for (i = x; i < x + w; i++)
 			sub[j-y][i-x] = (j < src_h && i < src_w) ? src[j][i] : 0;
 	}
@@ -284,35 +290,41 @@ u16** get_subimage(u16** src, uint src_w, uint src_h, uint x, uint y, uint w, ui
 }
 
 // retourne le nombre de sous-images extraites
-uint extract_subimages_and_save(u16** image_ng, uint img_w, uint img_h)
+uint extract_subimages_and_save(u16** image_ng, int width, int height)
 {
-	uint i, j, tmp, counter = 0;
+	int i, j;
+	uint tmp, counter = 0;
 	uint nbr_sub_x = 5;
-	uint sub_size = (uint)roundf(((float)img_w / (float)nbr_sub_x)); // == width == height (square)
-	uint loop_step = sub_size >> 1; // génération d'une sous-image à chaque taille/2.
-	uint nbr_sub_y = (uint)roundf(((float)img_h / (float)sub_size));
-/*
-	img_gris** subimages_mat; // actual type : u16**** (!)
+	uint sub_size = (uint)roundf(((float)width / (float)nbr_sub_x)); // == width == height (square)
+	int loop_step = sub_size >> 1; // génération d'une sous-image à chaque taille/2.
+	uint nbr_sub_y = (uint)roundf(((float)height / (float)sub_size));
 
-	subimages_mat = (img_gris**)malloc((nbr_sub_y-1) * sizeof(img_gris*)); // -1 because last is incomplete (thus useless)
-	if (!subimages_mat) return 0;
-	for (j = 0; j < nbr_sub_y; j++) {
-		subimages_mat[j] = (img_gris*)calloc((nbr_sub_x - 1), sizeof(img_gris));
-		if (!subimages_mat[j]) return 0;
-	}
-*/
 	u16** sub = NULL;
+	uint* sub_histo = NULL;
 	char* sub_filename = NULL;
 	sub_filename = calloc(strlen(nomFichier) + 25, sizeof(char)); // +15 => "_sub_x_y_w.bmp" + extra safety
-	DonneesImageRGB* dest_imgRGB = new_ImageRGB(sub_size, sub_size);
 
-	for (j = 0; j < img_h - loop_step; j += loop_step) {
-		for (i = 0; i < img_w - loop_step; i += loop_step) {
-			error("processing sub : %d ; %d\n", j, i);
-			sub = get_subimage(image_ng, img_w, img_h, i, j, sub_size, sub_size);
+	sprintf(sub_filename, "%s_sub_images", nomFichier);
+	createDirectory(sub_filename);
+	changeDirectory(sub_filename);
+
+	DonneesImageRGB* dest_imgRGB = new_ImageRGB(sub_size, sub_size);
+	DonneesImageRGB* sub_histo_img = NULL;
+
+	for (j = 0; j < height - loop_step; j += loop_step) {
+		for (i = 0; i < width - loop_step; i += loop_step) {
+			// error("processing sub : %d ; %d\n", j, i);
+			sub = get_subimage(image_ng, width, height, i, j, sub_size, sub_size);
 			sprintf(sub_filename, "%s_sub_%d_%d_%d.bmp", nomFichier, j, i, sub_size);
 			sauveImageNG(dest_imgRGB, sub);
 			ecrisBMPRGB_Dans(dest_imgRGB, sub_filename);
+
+			sub_histo = do_histogramme(sub, sub_size, sub_size);
+			sub_histo_img = imageHistogramme(sub_histo);
+			do_saveBMPwithName(sub_histo_img, sub_filename, "histogramme.bmp");
+
+			secure_free(sub_histo);
+			libereDonneesImageRGB(&sub_histo_img);
 
 			for (tmp = 0; tmp < sub_size; tmp++)
 				secure_free(sub[tmp]);
@@ -347,7 +359,7 @@ void choixAction(int choix)
 			printf("******************************\n");
 			printf("**** Bertrand - Debournoux ***\n");
 			printf("******* Biometrie - LBP ******\n");
-			printf("*****  v1.0 - 12/02/2014 *****\n");
+			printf("*****  v1.1 - 18/02/2014 *****\n");
 			printf("******************************\n\n");
 			printf("Image en cours : %s\n\n", nomFichier);
 			printf("* 1) LBP avec mediane \n");
@@ -355,7 +367,7 @@ void choixAction(int choix)
 			printf("* 2) Détection de visage(s) \n");
 			printf("* 3) Mediane \n");
 			printf("* 4) Histogramme \n");
-			printf("* 5) Extractions sous-images \n");
+			printf("* 5) LBP + Extractions sous-images + Histo \n");
 			printf("* 0) Quitter \n\n");
 			printf("******************************\n");
 			printf("Choix ? \n");
@@ -401,7 +413,10 @@ void choixAction(int choix)
 		case 5:
 			cree3matrices(matrice_bleue, matrice_rouge, matrice_verte, image_orig);
 			image_ng = couleur2NG(matrice_bleue, matrice_rouge, matrice_verte, false);
-			int counter = extract_subimages_and_save(image_ng, img_w, img_h);
+			tmp_ng1 = apply_filter(image_ng, filters[flt_LBP]);
+			sauveImageNG(image, tmp_ng1);
+			saveBMPwithCurrentName(image, "lbp.bmp");
+			int counter = extract_subimages_and_save(tmp_ng1, img_w, img_h);
 			error("counter : %d\n", counter);
 			break;
 		case 0:
@@ -449,7 +464,7 @@ void initData(int argc, char *argv[])
 #ifndef CONSOLE
 	error("loaded : %s\n", argv[1]);
 #endif
-	strcpy_s(nomFichier, (argc > 1) ? strlen(argv[1]) + 1 : 14, (argc > 1) ? argv[1] : "D:\\image.bmp");
+	strcpy_s(nomFichier, (argc > 1) ? strlen(argv[1]) + 1 : 14, (argc > 1) ? argv[1] : "image.bmp");
 
 	if (!strEndsWith(nomFichier, ".bmp")) {
 		printf("Image name doesn't contain the extension, adding it...\n");

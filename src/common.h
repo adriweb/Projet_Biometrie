@@ -1,6 +1,6 @@
 // Adrien Bertrand
 // Biométrie - LBP
-// v1.0 - 12/02/2014
+// v1.1 - 18/02/2014
 
 #ifndef __COMMON_H__
 #define __COMMON_H__
@@ -12,6 +12,8 @@
 #include <math.h>
 #include <locale.h>
 #include <time.h>
+#include <errno.h>
+
 #include "BmpLib.h"
 
 

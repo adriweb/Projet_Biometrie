@@ -1,6 +1,6 @@
 // Adrien Bertrand
 // Biométrie - LBP
-// v1.0 - 12/02/2014
+// v1.1 - 18/02/2014
 
 #include "filtering.h"
 
@@ -185,10 +185,12 @@ u16** apply_filter(u16** src, filter_t* filter)
 			imageNG_16[j][i] = imageNG[j][i];
 	}
 
-#pragma omp parallel for
-	for (j = 0; j < img_h; j++)
-		secure_free(imageNG[j]);
+//#pragma omp parallel for
+//	for (j = 0; j < img_h; j++)
+//		secure_free(imageNG[j]);
 	secure_free(imageNG);
+
+// TODO : fix that ! (free -> crash...)
 
 	return imageNG_16;
 }

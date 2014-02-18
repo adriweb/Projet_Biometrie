@@ -1,6 +1,6 @@
 ﻿// Adrien Bertrand
 // Biométrie - LBP
-// v1.0 - 12/02/2014
+// v1.1 - 18/02/2014
 
 #ifndef __BIO_LBP_H__
 #define __BIO_LBP_H__
@@ -87,6 +87,7 @@ void	seuilleImageNG(u16** imageNG, uint seuil);
 * \param	imageNG		Pointeur vers l'image en niveau de gris (matricielle)
 * \return	Histogramme sous forme de tableau d'entiers
 */
+uint* do_histogramme(u16** imageNG, uint w, uint h);
 uint*	histogramme(u16** imageNG);
 
 /**
@@ -124,9 +125,9 @@ void do_Seuil(int seuil);
 
 void do_PaletteReduction(int level);
 
-u16** get_subimage(u16** src, uint src_w, uint src_h, uint x, uint y, uint w, uint h);
+u16** get_subimage(u16** src, int src_w, int src_h, int x, int y, int w, int h);
 
-uint extract_subimages_and_save(u16** image_ng, uint img_w, uint img_h);
+uint extract_subimages_and_save(u16** image_ng, int width, int height);
 
 /**
 * \brief	Initialise les données de base
