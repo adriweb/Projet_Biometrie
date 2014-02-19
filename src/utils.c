@@ -66,17 +66,52 @@ void saveBMPwithCurrentName(DonneesImageRGB * image, const char* name)
 void createDirectory(const char* name)
 {
 #ifdef __linux__		
-		mkdir(name, 0700);
+	mkdir(name, 0700);
 #else
-		_mkdir(name);
+	(void)_mkdir(name);
 #endif
 }
 
 void changeDirectory(const char* name)
 {
 #ifdef __linux__		
-		chdir(name);
+	chdir(name);
 #else
-		_chdir(name);
+	(void)_chdir(name);
 #endif
+}
+
+int readHistoFromFile(uint* histo, const char* filename)
+{
+	FILE* fp;
+
+	if (!(fp = fopen(filename, "rb"))) {
+		printf("Cannot open file for writing...\n");
+		return -1;
+	}
+	else {
+		fread(histo, sizeof(uint), 256, fp);
+
+		fclose(fp);
+		return 0;
+	}
+}
+
+int writeHistoToFile(const char* filename, uint* histo)
+{
+	FILE* fp;
+
+	printf("histo[54] = %d\n", histo[54]);
+
+	if (!(fp = fopen(filename, "wb"))) {
+		printf("Cannot open file for writing...\n");
+		return -1;
+	} else {
+		fwrite(histo, sizeof(uint), 256, fp);
+
+		fclose(fp);
+		return 0;
+	}
+	
+	return 0;
 }

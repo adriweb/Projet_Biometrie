@@ -28,5 +28,7 @@ void saveBMPwithCurrentName(DonneesImageRGB * image, const char* name);
 void createDirectory(const char* name);
 void changeDirectory(const char* name);
 
+int readHistoFromFile(uint* histo, const char* filename);
+int writeHistoToFile(const char* filename, uint* histo);
 
 #endif

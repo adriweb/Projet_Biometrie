@@ -69,8 +69,8 @@ void negatifImage(u16** mat_bleue, u16** mat_rouge, u16** mat_verte) {
 u16** couleur2NG(u16** mat_bleue, u16** mat_rouge, u16** mat_verte, bool perceptive) {
 	int i, j;
 	double coeff_r = perceptive ? 0.2125 : 1,
-		coeff_g = perceptive ? 0.7154 : 1,
-		coeff_b = perceptive ? 0.0721 : 1;
+		   coeff_g = perceptive ? 0.7154 : 1,
+		   coeff_b = perceptive ? 0.0721 : 1;
 	uint divi = perceptive ? 1 : 3;
 	u16** imageNG = (u16**)malloc(img_h * sizeof(u16*));
 	if (!imageNG) return NULL;
@@ -302,7 +302,7 @@ uint extract_subimages_and_save(u16** image_ng, int width, int height)
 	u16** sub = NULL;
 	uint* sub_histo = NULL;
 	char* sub_filename = NULL;
-	sub_filename = calloc(strlen(nomFichier) + 25, sizeof(char)); // +15 => "_sub_x_y_w.bmp" + extra safety
+	sub_filename = calloc(strlen(nomFichier) + 35, sizeof(char)); // +15 => "_sub_x_y_w.bmp" + "histo" + extra safety
 
 	sprintf(sub_filename, "%s_sub_images", nomFichier);
 	createDirectory(sub_filename);
@@ -310,18 +310,23 @@ uint extract_subimages_and_save(u16** image_ng, int width, int height)
 
 	DonneesImageRGB* dest_imgRGB = new_ImageRGB(sub_size, sub_size);
 	DonneesImageRGB* sub_histo_img = NULL;
+	
+	for (j = 0; j < height - 2*loop_step; j += loop_step) {
+		for (i = 0; i < width - 2*loop_step; i += loop_step) {
 
-	for (j = 0; j < height - loop_step; j += loop_step) {
-		for (i = 0; i < width - loop_step; i += loop_step) {
-			// error("processing sub : %d ; %d\n", j, i);
 			sub = get_subimage(image_ng, width, height, i, j, sub_size, sub_size);
-			sprintf(sub_filename, "%s_sub_%d_%d_%d.bmp", nomFichier, j, i, sub_size);
+			if (!sub) return counter;
+			sprintf(sub_filename, "%s_sub_%d_%d_%u.bmp", nomFichier, j, i, sub_size);
 			sauveImageNG(dest_imgRGB, sub);
 			ecrisBMPRGB_Dans(dest_imgRGB, sub_filename);
 
 			sub_histo = do_histogramme(sub, sub_size, sub_size);
-			sub_histo_img = imageHistogramme(sub_histo);
-			do_saveBMPwithName(sub_histo_img, sub_filename, "histogramme.bmp");
+
+			sprintf(sub_filename, "%s_sub_%d_%d_%u_histo.bin", nomFichier, j, i, sub_size);
+			writeHistoToFile(sub_filename, sub_histo);
+			
+			//sub_histo_img = imageHistogramme(sub_histo);
+			//do_saveBMPwithName(sub_histo_img, sub_filename, "histogramme.bmp");
 
 			secure_free(sub_histo);
 			libereDonneesImageRGB(&sub_histo_img);
@@ -427,7 +432,6 @@ void choixAction(int choix)
 			break;
 		}
 
-#pragma omp parallel for
 		for (i = 0; i < img_h; i++) {
 			if (image_ng) secure_free(image_ng[i]);
 			if (tmp_ng1) secure_free(tmp_ng1[i]);
@@ -499,7 +503,7 @@ void initData(int argc, char *argv[])
 		matrice_verte[i] = (u16*)malloc(img_w * sizeof(u16));
 		matrice_bleue[i] = (u16*)malloc(img_w * sizeof(u16));
 	}
-	if (!(matrice_rouge[0] && matrice_verte[0] && matrice_bleue[0])) exit(-1);
+	if (!(matrice_rouge[0] && matrice_verte[0] && matrice_bleue[0])) exit(-1);	
 }
 
 void freeStuff()
@@ -511,7 +515,6 @@ void freeStuff()
 
 	secure_free(nomFichier);
 
-#pragma omp parallel for
 	for (i = 0; i < img_h; i++) {
 		if (matrice_bleue) secure_free(matrice_bleue[i]);
 		if (matrice_rouge) secure_free(matrice_rouge[i]);
