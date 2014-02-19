@@ -101,8 +101,6 @@ int writeHistoToFile(const char* filename, uint* histo)
 {
 	FILE* fp;
 
-	printf("histo[54] = %d\n", histo[54]);
-
 	if (!(fp = fopen(filename, "wb"))) {
 		printf("Cannot open file for writing...\n");
 		return -1;

@@ -1,6 +1,6 @@
 // Adrien Bertrand
 // Biométrie - LBP
-// v1.1 - 18/02/2014
+// v1.15 - 19/02/2014
 
 #include "filtering.h"
 

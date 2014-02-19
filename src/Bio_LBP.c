@@ -1,6 +1,6 @@
 ﻿// Adrien Bertrand
 // Biométrie - LBP
-// v1.1 - 18/02/2014
+// v1.15 - 19/02/2014
 
 #include "Bio_LBP.h"
 #include "filtering.h"
@@ -364,7 +364,7 @@ void choixAction(int choix)
 			printf("******************************\n");
 			printf("**** Bertrand - Debournoux ***\n");
 			printf("******* Biometrie - LBP ******\n");
-			printf("*****  v1.1 - 18/02/2014 *****\n");
+			printf("***** v1.15 - 19/02/2014 *****\n");
 			printf("******************************\n\n");
 			printf("Image en cours : %s\n\n", nomFichier);
 			printf("* 1) LBP avec mediane \n");
@@ -398,7 +398,6 @@ void choixAction(int choix)
 			saveBMPwithCurrentName(image, "lbp.bmp");
 			break;
 		case 2:
-			
 			error("Unimplemented !\n");
 			break;
 		case 3: // median test
@@ -503,7 +502,8 @@ void initData(int argc, char *argv[])
 		matrice_verte[i] = (u16*)malloc(img_w * sizeof(u16));
 		matrice_bleue[i] = (u16*)malloc(img_w * sizeof(u16));
 	}
-	if (!(matrice_rouge[0] && matrice_verte[0] && matrice_bleue[0])) exit(-1);	
+	if (!(matrice_rouge[0] && matrice_verte[0] && matrice_bleue[0]))
+		exit(-1);
 }
 
 void freeStuff()
