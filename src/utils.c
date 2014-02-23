@@ -2,9 +2,9 @@
 
 // Useful stuff :
 
-char* latestSavedImageName = NULL;
+string latestSavedImageName = NULL;
 
-char* getLatestSavedImageName() {
+string getLatestSavedImageName() {
 	return latestSavedImageName;
 }
 
@@ -44,12 +44,12 @@ DonneesImageRGB* new_ImageRGB(uint colonnes, uint lignes)
 	return imageRGB;
 }
 
-void do_saveBMPwithName(DonneesImageRGB * image, const char* name, const char* suffix)
+void do_saveBMPwithName(DonneesImageRGB * image, const string name, const string suffix)
 {
 	secure_free(latestSavedImageName);
 
 	uint len = strlen(name) + strlen(suffix) + 2;
-	latestSavedImageName = (char*)calloc(len, sizeof(char));
+	latestSavedImageName = (string)calloc(len, sizeof(char));
 	if (!latestSavedImageName) exit(-1);
 	strcpy(latestSavedImageName, name);
 	strcat(latestSavedImageName, "_");
@@ -58,12 +58,12 @@ void do_saveBMPwithName(DonneesImageRGB * image, const char* name, const char* s
 	ecrisBMPRGB_Dans(image, latestSavedImageName);
 }
 
-void saveBMPwithCurrentName(DonneesImageRGB * image, const char* name)
+void saveBMPwithCurrentName(DonneesImageRGB * image, const string name)
 {
 	do_saveBMPwithName(image, nomFichier, name);
 }
 
-void createDirectory(const char* name)
+void createDirectory(const string name)
 {
 #ifdef __linux__		
 	mkdir(name, 0700);
@@ -72,40 +72,63 @@ void createDirectory(const char* name)
 #endif
 }
 
-void changeDirectory(const char* name)
+char* getCurrentDirectory()
+{
+	const int size = 1024;
+	string cwd = (string)calloc(size, sizeof(char));
+#ifdef __linux__
+	if (getcwd(cwd, size))
+#else
+	if (_getcwd(cwd, size))
+#endif
+		return cwd;
+	else
+		perror("getcwd() error");
+	return "(error)";
+}
+
+void changeDirectory(const string name)
 {
 #ifdef __linux__		
 	chdir(name);
 #else
 	(void)_chdir(name);
 #endif
+	char* cwd = getCurrentDirectory();
+	//debugPrint("changed directory : %s\n", cwd);
+	secure_free(cwd);
 }
 
-int readHistoFromFile(uint* histo, const char* filename)
+uint* readHistoFromFile(const string filename)
 {
 	FILE* fp;
 
+	uint* histo = NULL;
+
 	if (!(fp = fopen(filename, "rb"))) {
-		printf("Cannot open file for writing...\n");
-		return -1;
-	}
-	else {
-		fread(histo, sizeof(uint), 256, fp);
+		error("Cannot open file for reading...\n");
+		return NULL;
+	} else {
+		histo = (uint*)calloc(GRAYLEVELS, sizeof(uint));
+		if (!histo) { fclose(fp);  return NULL; }
+
+		fread(histo, sizeof(uint), GRAYLEVELS, fp);
 
 		fclose(fp);
-		return 0;
+
+		return histo;
 	}
 }
 
-int writeHistoToFile(const char* filename, uint* histo)
+int writeHistoToFile(const string filename, uint* histo)
 {
 	FILE* fp;
 
 	if (!(fp = fopen(filename, "wb"))) {
-		printf("Cannot open file for writing...\n");
+		error("Cannot open file for writing...\n");
 		return -1;
 	} else {
-		fwrite(histo, sizeof(uint), 256, fp);
+		fwrite(histo, sizeof(uint), GRAYLEVELS, fp);
 
 		fclose(fp);
 		return 0;

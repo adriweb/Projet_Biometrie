@@ -1,20 +1,16 @@
 ﻿// Adrien Bertrand
 // Biométrie - LBP
-// v1.15 - 19/02/2014
+// v1.17 - 22/02/2014
 
 #include "Bio_LBP.h"
 #include "filtering.h"
 #include "utils.h"
 
 
-// Petites variables globales et pointeurs globaux
+/*  --------- Petites variables globales et pointeurs globaux ---------  */
 
 int img_w, img_h;
-char* nomFichier = NULL;
-
-int man_seuil = 100;
-int taille_gaussien = 0;
-int nbrCouleursReduc = 0;
+string nomFichier = NULL;
 
 DonneesImageRGB * image_orig;
 DonneesImageRGB * image;
@@ -30,7 +26,11 @@ u16 ** image_ng;
 uint * histo;
 uint * histoCumule;
 
+histo_model_t* histo_db;
+uint histo_db_size = 0;
 
+
+/*  --------- Fonctions ---------  */
 
 void cree3matrices(u16** mat_bleue, u16** mat_rouge, u16** mat_verte, DonneesImageRGB* image) {
 	int i, j, k = 0;
@@ -111,6 +111,7 @@ uint* histogramme(u16** imageNG) {
 
 uint* histogrammeCumule(u16** imageNG) {
 	histoCumule = histogramme(imageNG);
+	if (!histoCumule) return NULL;
 
 	int i;
 	for (i = 1; i < GRAYLEVELS; i++)
@@ -121,10 +122,11 @@ uint* histogrammeCumule(u16** imageNG) {
 
 void histo_egalisation(u16** imageNG) {
 	histoCumule = histogrammeCumule(imageNG);
+	if (!histoCumule) return;
 
 	int i, j = 0;
 	float ratio = 255.0f / (float)(img_h*img_w);
-#pragma omp parallel for
+
 	for (j = 0; j < img_h; j++)
 	for (i = 0; i < img_w; i++)
 		imageNG[j][i] = (u16)((float)histoCumule[imageNG[j][i]] * ratio);
@@ -149,7 +151,6 @@ DonneesImageRGB* imageHistogramme(uint* histo)
 	for (i = 0; i < GRAYLEVELS; i++)
 		histoNorm[i] = (uint)(histo[i] / ratio); // normalisation
 
-#pragma omp parallel for
 	for (i = 0; i < GRAYLEVELS; i++)
 	for (j = 0; j < (int)(histoNorm[i]); j++)
 		memset(&(imageHisto->donneesRGB[(3 * (i + j * colonnes))]), (j >= (int)(histoNorm[i-1]) || j >= (int)(histoNorm[i+1])) ? 0 : j % 235, 3);
@@ -271,6 +272,81 @@ void do_PaletteReduction(int level)
 	}
 }
 
+// returns the number of elements in DB
+uint make_histo_db()
+{
+	uint i, sample, idx = 0;
+	
+	const unsigned int nbr_features = 4;
+	string feature_dirs[] = { "bouche", "nez", "oeild", "oeilg" }; // size : nbr_features
+	// same order as the _feature_type_t enum
+
+	const unsigned int nbr_samples = 1; // for each directory (feature).
+	// todo : find out this number by reading the directories.
+
+	// array of _histo_model_t
+	histo_db = (histo_model_t*)malloc(nbr_samples * nbr_features * sizeof(histo_model_t));
+	if (!histo_db) { error("error allocating histo_db\n"); return 0; };
+
+	string feature_dirName = calloc(20, sizeof(char));
+	string feature_fileName = calloc(30, sizeof(char));
+	
+	changeDirectory("modeles");
+	for (i = 0; i < nbr_features; i++) {
+		strcpy_s(feature_dirName, strlen(feature_dirs[i])+1, feature_dirs[i]);
+		changeDirectory(feature_dirName);
+		for (sample = 1; sample <= nbr_samples; sample++) {
+			sprintf_s(feature_fileName, strlen(feature_dirName)+10, "%s_%02d.bmp", feature_dirName, sample);
+			histo_db[idx].histo = readHistoFromFile(feature_fileName);
+			histo_db[idx].type = (feature_type_t)i;
+			debugPrint("read %s and saved it into : histo_db[%u] (%p)\n", feature_fileName, idx, &(histo_db[i]));
+			if (!(histo_db[idx].histo)) {
+				error("*** histo_db[%u].histo is NULL ! Going to the next element overwriting histo_db[%d] ... ***\n", idx, idx);
+			} else {
+				idx++;
+			}
+		}
+		changeDirectory("..");
+	}
+	changeDirectory("..");
+
+	secure_free(feature_fileName);
+	secure_free(feature_dirName);
+
+	return idx; // count
+}
+
+uint compare_two_histograms(uint* histo1, uint* histo2)
+{
+	uint val; // ressemblance value;
+
+	//debug
+	val = 0;
+
+	return val;
+}
+
+// todo : change type
+void compare_histo_with_models(uint* histo)
+{
+	/* En résumé :
+	 * new histo_modele;
+	 * int tmp, bestFit
+	 * 
+	 * bestFit = 0
+	 * bestType = ""
+	 * 
+	 *     tmp = compare_two_histograms(histo_modele, histo)
+	 *     if (tmp>bestFit) { 
+	 *         bestFit = tmp;
+	 *         bestType = type;
+	 *     }
+	 * }
+	 * 
+	 * printf stuff.
+	 *
+	 **/
+}
 
 u16** get_subimage(u16** src, int src_w, int src_h, int x, int y, int w, int h)
 {
@@ -282,7 +358,7 @@ u16** get_subimage(u16** src, int src_w, int src_h, int x, int y, int w, int h)
 
 	for (j = y; j < y+h; j++) {
 		sub[j-y] = (u16*)calloc(w, sizeof(u16));
-		if (!sub[j-y]) exit(1);
+		if (!sub[j-y]) return NULL;
 		for (i = x; i < x + w; i++)
 			sub[j-y][i-x] = (j < src_h && i < src_w) ? src[j][i] : 0;
 	}
@@ -301,7 +377,7 @@ uint extract_subimages_and_save(u16** image_ng, int width, int height)
 
 	u16** sub = NULL;
 	uint* sub_histo = NULL;
-	char* sub_filename = NULL;
+	string sub_filename = NULL;
 	sub_filename = calloc(strlen(nomFichier) + 35, sizeof(char)); // +15 => "_sub_x_y_w.bmp" + "histo" + extra safety
 
 	sprintf(sub_filename, "%s_sub_images", nomFichier);
@@ -322,8 +398,10 @@ uint extract_subimages_and_save(u16** image_ng, int width, int height)
 
 			sub_histo = do_histogramme(sub, sub_size, sub_size);
 
-			sprintf(sub_filename, "%s_sub_%d_%d_%u_histo.bin", nomFichier, j, i, sub_size);
-			writeHistoToFile(sub_filename, sub_histo);
+			// Todo : compare stuff.
+
+			//sprintf(sub_filename, "%s_sub_%d_%d_%u_histo.bin", nomFichier, j, i, sub_size);
+			//writeHistoToFile(sub_filename, sub_histo);
 			
 			//sub_histo_img = imageHistogramme(sub_histo);
 			//do_saveBMPwithName(sub_histo_img, sub_filename, "histogramme.bmp");
@@ -338,6 +416,8 @@ uint extract_subimages_and_save(u16** image_ng, int width, int height)
 			counter++;
 		}
 	}
+
+	changeDirectory("..");
 
 	secure_free(sub_filename);
 
@@ -355,7 +435,16 @@ void choixAction(int choix)
 	while (!end) {
 
 		cree3matrices(matrice_bleue, matrice_rouge, matrice_verte, image_orig);
-		image_ng = couleur2NG(matrice_bleue, matrice_rouge, matrice_verte, true);
+		image_ng = couleur2NG(matrice_bleue, matrice_rouge, matrice_verte, false);
+
+		tmp_ng1 = apply_filter(image_ng, filters[flt_Median]);
+		for (i = 0; i < img_h; i++) {
+			if (image_ng) secure_free(image_ng[i]);
+		}
+		secure_free(image_ng);
+		image_ng = tmp_ng1;
+		tmp_ng1 = NULL;
+
 
 #ifdef CONSOLE
 
@@ -364,15 +453,17 @@ void choixAction(int choix)
 			printf("******************************\n");
 			printf("**** Bertrand - Debournoux ***\n");
 			printf("******* Biometrie - LBP ******\n");
-			printf("***** v1.15 - 19/02/2014 *****\n");
+			printf("***** v1.17 - 22/02/2014 *****\n");
 			printf("******************************\n\n");
 			printf("Image en cours : %s\n\n", nomFichier);
-			printf("* 1) LBP avec mediane \n");
-			printf("* 10) LBP sans mediane \n");
-			printf("* 2) Détection de visage(s) \n");
-			printf("* 3) Mediane \n");
-			printf("* 4) Histogramme \n");
+			printf("******************************\n\n");
+			printf("(Un filtre median est fait avant toute chose)\n");
+			printf("* 1) LBP \n");
+			printf("* 2) Filtre median seul \n");
+			printf("* 3) Histogramme (image + bin)\n");
+			printf("* 4) Détection de visage(s) \n");
 			printf("* 5) LBP + Extractions sous-images + Histo \n");
+			printf("* 10) Init Models DB \n");
 			printf("* 0) Quitter \n\n");
 			printf("******************************\n");
 			printf("Choix ? \n");
@@ -385,43 +476,42 @@ void choixAction(int choix)
 		switch (choix) {
 		
 		case 1:
-			tmp_ng1 = apply_filter(image_ng, filters[flt_Median]);
-			tmp_ng2 = apply_filter(tmp_ng1, filters[flt_LBP]);
-
-			sauveImageNG(image, tmp_ng2);
+			tmp_ng1 = apply_filter(image_ng, filters[flt_LBP]);
+			sauveImageNG(image, tmp_ng1);
 			saveBMPwithCurrentName(image, "lbp-with-median.bmp");
 			break;
-		case 10:
-			tmp_ng1 = apply_filter(image_ng, filters[flt_LBP]);
-
-			sauveImageNG(image, tmp_ng1);
-			saveBMPwithCurrentName(image, "lbp.bmp");
-			break;
-		case 2:
-			error("Unimplemented !\n");
-			break;
-		case 3: // median test
-			tmp_ng1 = apply_filter(image_ng, filters[flt_Median]);
-
-			sauveImageNG(image, tmp_ng1);
+		case 2: // median test
+			sauveImageNG(image, image_ng);
 			saveBMPwithCurrentName(image, "median.bmp");
 			break;
-		case 4:
-			cree3matrices(matrice_bleue, matrice_rouge, matrice_verte, image_orig);
-			image_ng = couleur2NG(matrice_bleue, matrice_rouge, matrice_verte, false);
+		case 3:
 			histo = histogramme(image_ng);
 			histo_img = imageHistogramme(histo);
+			
 			saveBMPwithCurrentName(histo_img, "histogramme.bmp");
+
+			string binhisto_name = (string)calloc(strlen(nomFichier) + 15, sizeof(char));
+			if (!binhisto_name) { secure_free(histo); break; }
+			sprintf(binhisto_name, "%s_histo.bin", nomFichier);
+			writeHistoToFile(binhisto_name, histo);
+
 			secure_free(histo);
+			secure_free(binhisto_name);
+			break;
+		case 4:
+			debugPrint("Detection de visage :  niveau-de-gris > mediane > lbp > sous-images > histogrammes > comparaison avec modeles > deductions \n");
 			break;
 		case 5:
-			cree3matrices(matrice_bleue, matrice_rouge, matrice_verte, image_orig);
-			image_ng = couleur2NG(matrice_bleue, matrice_rouge, matrice_verte, false);
 			tmp_ng1 = apply_filter(image_ng, filters[flt_LBP]);
 			sauveImageNG(image, tmp_ng1);
 			saveBMPwithCurrentName(image, "lbp.bmp");
 			int counter = extract_subimages_and_save(tmp_ng1, img_w, img_h);
-			error("counter : %d\n", counter);
+			debugPrint("counter : %d\n", counter);
+			break;
+		case 10:
+			printf("Making Models DB ...\n");
+			histo_db_size = make_histo_db();
+			printf("DB OK. Number of elements : %d\n", histo_db_size);
 			break;
 		case 0:
 			end = true;
@@ -461,11 +551,11 @@ void choixAction(int choix)
 
 void initData(int argc, char *argv[])
 {
-	nomFichier = (char*)calloc(350, sizeof(char));
+	nomFichier = (string)calloc(350, sizeof(char));
 	if (!nomFichier) return;
 
 #ifndef CONSOLE
-	error("loaded : %s\n", argv[1]);
+	debugPrint("loaded : %s\n", argv[1]);
 #endif
 	strcpy_s(nomFichier, (argc > 1) ? strlen(argv[1]) + 1 : 14, (argc > 1) ? argv[1] : "image.bmp");
 

@@ -1,6 +1,6 @@
 // Adrien Bertrand
 // Biométrie - LBP
-// v1.15 - 19/02/2014
+// v1.17 - 22/02/2014
 
 #ifndef __COMMON_H__
 #define __COMMON_H__
@@ -13,22 +13,24 @@
 #include <locale.h>
 #include <time.h>
 #include <errno.h>
-
 #include "BmpLib.h"
 
+#define IS_DEBUG	1
 
 #define CONSOLE
 #ifdef CONSOLE
-#define MAIN_NAME main
+#define MAIN_NAME	main
 #else
-#define MAIN_NAME main_console
+#define MAIN_NAME	main_console
 #endif
 
 typedef unsigned char		u8;
 typedef unsigned short int	u16;
 typedef unsigned int		uint;
 
-typedef u16**				img_gris;
+typedef u16**	img_gris;
+
+typedef char*	string; // for the lulz
 
 // just in case (Mac OS X doesn't have those by default, on QT Creator at least)
 #ifndef INT_MIN
@@ -40,10 +42,11 @@ typedef u16**				img_gris;
 * \brief	no-VS compatibility stuff ("secure" functions)
 */
 #ifndef _MSC_VER
-#define scanf_s			scanf
-#define gets_s(a,b)		gets(a)
-#define strcpy_s(a,b,c)	strncpy(a,c,b)
-#define MAIN_NAME		main
+#define scanf_s				scanf
+#define gets_s(a,b)			gets((a))
+#define strcpy_s(a,b,c)		strncpy((a),(c),(b))
+#define sprintf_s(a,b,c)	snprintf((a),(b),(c))
+#define MAIN_NAME			main
 #endif
 
 #define NUMARGS(...)  (sizeof((int[]){__VA_ARGS__})/sizeof(int))
@@ -53,12 +56,18 @@ typedef u16**				img_gris;
 /**
 * \brief	free(NULL) shouldn't be an issue on decent compilers, but on others... Also, sets to NULL the freed pointer.
 */
-#define secure_free(x)	do { if (x) { free(x); x = NULL; } } while(0)
+#define secure_free(x)	do { if (x != NULL) { free(x); x = NULL; } } while(0)
 
 /**
 * \brief	fprintf vers le flux d'erreur + flush
 */
 #define error(...) do { fprintf(stderr, __VA_ARGS__); fflush(stderr); } while(0)
+
+#ifdef IS_DEBUG
+#define debugPrint(...) do { fprintf(stdout, __VA_ARGS__); fflush(stdout); } while(0)
+#else
+#define debugPrint(...)
+#endif
 
 /**
 * \brief	Sachant que R=G=B pour les niveaux de gris, on utilise la fonction générale avec les 3 mêmes paramètres.
@@ -67,7 +76,7 @@ typedef u16**				img_gris;
 
 
 extern int img_w, img_h;
-extern char* nomFichier;
-extern char* latestSavedImageName;
+extern string nomFichier;
+extern string latestSavedImageName;
 
 #endif

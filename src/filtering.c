@@ -1,6 +1,6 @@
 // Adrien Bertrand
 // Biométrie - LBP
-// v1.15 - 19/02/2014
+// v1.17 - 22/02/2014
 
 #include "filtering.h"
 
@@ -93,14 +93,6 @@ void reNormalize(int** imageNG)
 
 }
 
-void reBound(int** imageNG)
-{
-	int i, j;
-	for (j = 0; j < img_h; j++)
-	for (i = 0; i < img_w; i++)
-		imageNG[j][i] = (imageNG[j][i] < 0) ? 0 : ((imageNG[j][i]) > 255 ? 255 : imageNG[j][i]);
-}
-
 u16** apply_filter(u16** src, filter_t* filter)
 {
 	int filter_size = filter->size;
@@ -114,20 +106,21 @@ u16** apply_filter(u16** src, filter_t* filter)
 		return NULL;
 	}
 
+	int** imageNG = NULL;
+	u16** imageNG_16 = NULL;
+
 	int i, j;
 	int x, y;
 	int tmp;
 
+	uint median_array_idx;
 	int* median_array = NULL;
 	if (filter->method == flt_m_Median) {
 		median_array = (int*)calloc(filter_size * filter_size, sizeof(int));
 		if (!median_array) return NULL;
 	}
 
-	uint median_array_idx;
-
-
-	int** imageNG = (int**)malloc(img_w*img_h * sizeof(int*));
+	imageNG = (int**)malloc(img_h * sizeof(int*));
 	if (!imageNG) return NULL;
 	for (j = 0; j < img_h; j++) {
 		imageNG[j] = (int*)calloc(img_w, sizeof(int));
@@ -168,14 +161,10 @@ u16** apply_filter(u16** src, filter_t* filter)
 		break;
 	}
 
-	if (filter->method == flt_m_LBP) {
-		if (filter->reBoundOnly)
-			reBound(imageNG);
-		else
-			reNormalize(imageNG);
-	}
+	if (filter->method == flt_m_LBP)
+		reNormalize(imageNG);
 
-	u16** imageNG_16 = (u16**)malloc(img_h * sizeof(u16*));
+	imageNG_16 = (u16**)malloc(img_h * sizeof(u16*));
 	if (!imageNG_16) return NULL;
 	for (j = 0; j < img_h; j++) {
 		imageNG_16[j] = (u16*)calloc(img_w, sizeof(u16));
@@ -228,7 +217,6 @@ filter_t** createFilters()
 		if (!filters[i]) return NULL;
 		filters[i]->needNormalization = false;
 		filters[i]->div = 0;
-		filters[i]->reBoundOnly = false;
 		size = 3;
 		filters[i]->size = size;
 		if (i != flt_Median) {

@@ -1,6 +1,6 @@
 ﻿// Adrien Bertrand
 // Biométrie - LBP
-// v1.15 - 19/02/2014
+// v1.17 - 22/02/2014
 
 #ifndef __BIO_LBP_H__
 #define __BIO_LBP_H__
@@ -24,9 +24,23 @@ extern u16 ** image_ng;
 extern uint * histo;
 extern uint * histoCumule;
 
-extern int man_seuil;
-extern int taille_gaussien;
-extern int nbrCouleursReduc;
+typedef enum _feature_type_t {
+	feat_bouche,
+	feat_new,
+	feat_oeilg,
+	feat_oeild
+} feature_type_t;
+
+typedef struct _histo_model_t {
+	uint* histo;
+	feature_type_t type;
+} histo_model_t;
+
+
+extern histo_model_t* histo_db;
+extern uint histo_db_size;
+
+
 
 /**
 * \brief	Simple rectangle défini par son sommet en haut à gauche, et ses dimensions

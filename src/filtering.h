@@ -1,6 +1,6 @@
 // Adrien Bertrand
 // Biométrie - LBP
-// v1.15 - 19/02/2014
+// v1.17 - 22/02/2014
 
 #ifndef __FILTERING_H__
 #define __FILTERING_H__
@@ -38,7 +38,6 @@ typedef struct _filter_t {
 	uint size;
 	uint div;
 	bool needNormalization;
-	bool reBoundOnly;
 } filter_t;
 
 extern filter_t** filters;
