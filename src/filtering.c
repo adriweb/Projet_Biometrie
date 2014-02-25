@@ -1,6 +1,6 @@
 // Adrien Bertrand
 // Biométrie - LBP
-// v1.17 - 22/02/2014
+// v1.20 - 25/02/2014
 
 #include "filtering.h"
 
@@ -25,7 +25,8 @@ int getMedian(int* arr, uint n)
 	int median;
 	int middle, ll, hh;
 
-	low = 0; high = n - 1; median = (low + high) >> 1;
+	low = 0; high = n - 1;
+	median = (low + high) >> 1;
 	for (;;) {
 
 		if (high <= low) // One element only
@@ -39,12 +40,12 @@ int getMedian(int* arr, uint n)
 
 		/* Find median of low, middle and high items; swap into position low */
 		middle = (low + high) >> 1;
-		if (arr[middle] > arr[high])    INT_SWAP(arr[middle], arr[high]);
-		if (arr[low] > arr[high])       INT_SWAP(arr[low], arr[high]);
-		if (arr[middle] > arr[low])     INT_SWAP(arr[middle], arr[low]);
+		if (arr[middle] > arr[high])	INT_SWAP(arr[middle],	arr[high]);
+		if (arr[low]	> arr[high])	INT_SWAP(arr[low],		arr[high]);
+		if (arr[middle] > arr[low])		INT_SWAP(arr[middle],	arr[low]);
 
 		/* Swap low item (now in position middle) into position (low+1) */
-		INT_SWAP(arr[middle], arr[low + 1]);
+		INT_SWAP(arr[middle], arr[low+1]);
 
 		/* Nibble from each end towards middle, swapping items when stuck */
 		ll = low + 1;
@@ -171,7 +172,7 @@ u16** apply_filter(u16** src, filter_t* filter)
 		if (!imageNG_16[j]) return NULL;
 #pragma omp parallel for
 		for (i = 0; i < img_w; i++)
-			imageNG_16[j][i] = imageNG[j][i];
+			imageNG_16[j][i] = (u16)imageNG[j][i];
 	}
 
 //#pragma omp parallel for
@@ -201,7 +202,7 @@ void matrix_copy(int** dest, int** src, uint cols, uint rows)
 }
 
 
-filter_t** createFilters()
+filter_t** createFilters(void)
 {
 	uint i, j, size;
 

@@ -1,6 +1,6 @@
 ﻿// Adrien Bertrand
 // Biométrie - LBP
-// v1.17 - 22/02/2014
+// v1.20 - 25/02/2014
 
 #ifndef __BIO_LBP_H__
 #define __BIO_LBP_H__
@@ -28,19 +28,25 @@ typedef enum _feature_type_t {
 	feat_bouche,
 	feat_new,
 	feat_oeilg,
-	feat_oeild
+	feat_oeild,
+	feat_VOID // nothing (placeholder).
 } feature_type_t;
 
 typedef struct _histo_model_t {
 	uint* histo;
 	feature_type_t type;
+	uint reliability;
+	uint x, y;
 } histo_model_t;
 
+typedef histo_model_t	histo_ownImage_t;
 
-extern histo_model_t* histo_db;
+
+extern histo_model_t*	histo_models_db;
 extern uint histo_db_size;
 
-
+extern histo_ownImage_t* histo_ownImage_db;
+const uint histo_ownImage_db_size = 4; // 4 feat types
 
 /**
 * \brief	Simple rectangle défini par son sommet en haut à gauche, et ses dimensions
@@ -87,7 +93,8 @@ void	negatifImage(u16** mat_bleue, u16** mat_rouge, u16** mat_verte);
 * \param	perceptive	Indique si la fonction doit produire un niveau de gris être perceptif ou mathématique.
 * \return	Matrice 2D représentant l'image en niveaux de gris
 */
-u16**	couleur2NG(u16** mat_bleue, u16** mat_rouge, u16** mat_verte, bool perceptive);
+u16**	couleur2NG(u16**, u16** mat_rouge, u16** mat_verte, bool perceptive);
+u16**	do_couleur2NG(u16** mat_bleue, u16** mat_rouge, u16** mat_verte, bool perceptive, uint w, uint h);
 
 /**
 * \brief	Réalise le seuillage d'une image en niveau de gris (matricielle)
@@ -101,7 +108,7 @@ void	seuilleImageNG(u16** imageNG, uint seuil);
 * \param	imageNG		Pointeur vers l'image en niveau de gris (matricielle)
 * \return	Histogramme sous forme de tableau d'entiers
 */
-uint* do_histogramme(u16** imageNG, uint w, uint h);
+uint*	do_histogramme(u16** imageNG, uint w, uint h);
 uint*	histogramme(u16** imageNG);
 
 /**
@@ -141,7 +148,7 @@ void do_PaletteReduction(int level);
 
 u16** get_subimage(u16** src, int src_w, int src_h, int x, int y, int w, int h);
 
-uint extract_subimages_and_save(u16** image_ng, int width, int height);
+uint extract_subimages_and_compare(u16** image_ng, int width, int height);
 
 /**
 * \brief	Initialise les données de base
@@ -156,12 +163,11 @@ void choixAction(int choix);
 /**
 * \brief	Libère la mémoire utilisée par les données allouées
 */
-void freeStuff();
+void freeStuff(void);
 
 /**
 * \brief	main au nom variable selon la compilation en console ou en GUI
 */
 int MAIN_NAME(int argc, char *argv[]);
-
 
 #endif

@@ -4,7 +4,7 @@
 
 string latestSavedImageName = NULL;
 
-string getLatestSavedImageName() {
+string getLatestSavedImageName(void) {
 	return latestSavedImageName;
 }
 
@@ -30,6 +30,28 @@ int array_max_idx(int* arr, int size) {
 	for (i = 0; i < size; i++)
 	if (arr[i] > arr[idx]) idx = i;
 	return idx;
+}
+
+u16** new_u16_mat(uint colonnes, uint lignes)
+{
+	uint i;
+	u16** mat = (u16**)malloc(lignes * sizeof(u16*));
+	if (!mat) return NULL;
+
+	for (i = 0; i < lignes; i++) {
+		mat[i] = (u16*)malloc(colonnes * sizeof(u16));
+		if (!mat[i]) return NULL;
+	}
+
+	return mat;
+}
+
+void free_u16_mat(u16** mat, uint lignes)
+{
+	uint i;
+	for (i = 0; i < lignes; i++)
+		if (mat) secure_free(mat[i]);
+	secure_free(mat);
 }
 
 DonneesImageRGB* new_ImageRGB(uint colonnes, uint lignes)
@@ -72,7 +94,7 @@ void createDirectory(const string name)
 #endif
 }
 
-char* getCurrentDirectory()
+char* getCurrentDirectory(void)
 {
 	const int size = 1024;
 	string cwd = (string)calloc(size, sizeof(char));
@@ -123,16 +145,16 @@ uint* readHistoFromFile(const string filename)
 int writeHistoToFile(const string filename, uint* histo)
 {
 	FILE* fp;
+	int retVal = 0;
 
 	if (!(fp = fopen(filename, "wb"))) {
 		error("Cannot open file for writing...\n");
-		return -1;
+		retVal = -1;
 	} else {
 		fwrite(histo, sizeof(uint), GRAYLEVELS, fp);
 
 		fclose(fp);
-		return 0;
 	}
 	
-	return 0;
+	return retVal;
 }

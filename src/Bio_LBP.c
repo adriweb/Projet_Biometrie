@@ -1,6 +1,6 @@
 ﻿// Adrien Bertrand
 // Biométrie - LBP
-// v1.17 - 22/02/2014
+// v1.20 - 25/02/2014
 
 #include "Bio_LBP.h"
 #include "filtering.h"
@@ -26,9 +26,10 @@ u16 ** image_ng;
 uint * histo;
 uint * histoCumule;
 
-histo_model_t* histo_db;
+histo_model_t* histo_models_db;
 uint histo_db_size = 0;
 
+histo_ownImage_t* histo_ownImage_db;
 
 /*  --------- Fonctions ---------  */
 
@@ -66,24 +67,32 @@ void negatifImage(u16** mat_bleue, u16** mat_rouge, u16** mat_verte) {
 	}
 }
 
-u16** couleur2NG(u16** mat_bleue, u16** mat_rouge, u16** mat_verte, bool perceptive) {
-	int i, j;
-	double coeff_r = perceptive ? 0.2125 : 1,
-		   coeff_g = perceptive ? 0.7154 : 1,
-		   coeff_b = perceptive ? 0.0721 : 1;
+// real function with widht and height parameters
+u16** do_couleur2NG(u16** mat_bleue, u16** mat_rouge, u16** mat_verte, bool perceptive, uint w, uint h)
+{
+	uint i, j;
+	double	coeff_r = perceptive ? 0.2125 : 1,
+			coeff_g = perceptive ? 0.7154 : 1,
+			coeff_b = perceptive ? 0.0721 : 1;
 	uint divi = perceptive ? 1 : 3;
-	u16** imageNG = (u16**)malloc(img_h * sizeof(u16*));
+
+	u16** imageNG = new_u16_mat(w, h);
 	if (!imageNG) return NULL;
-	for (j = 0; j < img_h; j++) {
-		imageNG[j] = (u16*)calloc(img_w, sizeof(u16));
-		if (!imageNG[j]) return NULL;
-		for (i = 0; i < img_w; i++)
+
+	for (j = 0; j < h; j++)
+		for (i = 0; i < w; i++)
 			imageNG[j][i] = (u16)((mat_rouge[j][i] * coeff_r + mat_verte[j][i] * coeff_g + mat_bleue[j][i] * coeff_b) / divi);
-	}
+
 	return imageNG;
 }
 
-void seuilleImageNG(u16** imageNG, uint seuil) {
+// wrapper for global image with known size.
+u16** couleur2NG(u16** mat_bleue, u16** mat_rouge, u16** mat_verte, bool perceptive) {
+	return do_couleur2NG(mat_bleue, mat_rouge, mat_verte, perceptive, img_w, img_h);
+}
+
+void seuilleImageNG(u16** imageNG, uint seuil)
+{
 	int i, j = 0;
 #pragma omp parallel for
 	for (j = 0; j < img_h; j++)
@@ -91,17 +100,22 @@ void seuilleImageNG(u16** imageNG, uint seuil) {
 		imageNG[j][i] = (imageNG[j][i] > seuil) ? 255 : 0;
 }
 
+uint* new_histo(void)
+{
+	return (uint*)calloc(GRAYLEVELS, sizeof(uint));
+}
+
 uint* do_histogramme(u16** imageNG, uint w, uint h)
 {
 	uint i, j;
 
-	histo = (uint*)calloc(GRAYLEVELS, sizeof(uint));
+	histo = new_histo();
 	if (!histo) return NULL;
 
 	for (j = 0; j < h; j++)
 	for (i = 0; i < w; i++)
 		histo[imageNG[j][i]]++;
-
+	
 	return histo;
 }
 
@@ -144,7 +158,7 @@ DonneesImageRGB* imageHistogramme(uint* histo)
 
 	float ratio = histo[array_max_idx((int*)histo, GRAYLEVELS)] / (float)lignes;
 
-	uint* histoNorm = (uint*)malloc(GRAYLEVELS*sizeof(uint));
+	uint* histoNorm = new_histo();
 	if (!histoNorm) return NULL;
 
 #pragma omp parallel for
@@ -273,23 +287,35 @@ void do_PaletteReduction(int level)
 }
 
 // returns the number of elements in DB
-uint make_histo_db()
+uint make_histo_db(void)
 {
 	uint i, sample, idx = 0;
-	
-	const unsigned int nbr_features = 4;
-	string feature_dirs[] = { "bouche", "nez", "oeild", "oeilg" }; // size : nbr_features
+
+	DonneesImageRGB* tmp_img_rgb = NULL;
+	uint modele_w, modele_h;
+
+	u16** tmp_img_ng = NULL;
+	u16** tmp_mat_rouge = NULL;
+	u16** tmp_mat_vert = NULL;
+	u16** tmp_mat_bleu = NULL;
+
+	string feature_dirs[] = { "bouche", "nez", "oeild", "oeilg" };
+	const uint nbr_features = array_count(feature_dirs);
+
+	error("nbr_features : %u\n", nbr_features);
+
 	// same order as the _feature_type_t enum
 
-	const unsigned int nbr_samples = 1; // for each directory (feature).
+	const uint nbr_samples = 1; // for each directory (feature).
 	// todo : find out this number by reading the directories.
 
 	// array of _histo_model_t
-	histo_db = (histo_model_t*)malloc(nbr_samples * nbr_features * sizeof(histo_model_t));
-	if (!histo_db) { error("error allocating histo_db\n"); return 0; };
+	histo_models_db = (histo_model_t*)malloc(nbr_samples * nbr_features * sizeof(histo_model_t));
+	if (!histo_models_db) { error("error allocating histo_db\n"); return 0; };
 
 	string feature_dirName = calloc(20, sizeof(char));
 	string feature_fileName = calloc(30, sizeof(char));
+	if (!feature_fileName || !feature_dirName) return 0;
 	
 	changeDirectory("modeles");
 	for (i = 0; i < nbr_features; i++) {
@@ -297,55 +323,92 @@ uint make_histo_db()
 		changeDirectory(feature_dirName);
 		for (sample = 1; sample <= nbr_samples; sample++) {
 			sprintf_s(feature_fileName, strlen(feature_dirName)+10, "%s_%02d.bmp", feature_dirName, sample);
-			histo_db[idx].histo = readHistoFromFile(feature_fileName);
-			histo_db[idx].type = (feature_type_t)i;
-			debugPrint("read %s and saved it into : histo_db[%u] (%p)\n", feature_fileName, idx, &(histo_db[i]));
-			if (!(histo_db[idx].histo)) {
+
+			if (tmp_img_rgb) libereDonneesImageRGB(&tmp_img_rgb);
+			tmp_img_rgb = lisBMPRGB(feature_fileName);
+			if (!)
+			modele_w = tmp_img_rgb->largeurImage;
+			modele_h = tmp_img_rgb->hauteurImage;
+
+			// only malloc once...
+			if (!tmp_mat_bleu) {
+				tmp_mat_bleu = new_u16_mat(modele_w, modele_h);
+				tmp_mat_rouge = new_u16_mat(modele_w, modele_h);
+				tmp_mat_vert = new_u16_mat(modele_w, modele_h);
+				if (!(tmp_mat_vert[modele_w - 1])) return 0;
+			}
+			
+			cree3matrices(tmp_mat_bleu, tmp_mat_rouge, tmp_mat_vert, tmp_img_rgb);
+			if (tmp_img_ng) secure_free(tmp_img_ng);
+			tmp_img_ng = do_couleur2NG(tmp_mat_bleu, tmp_mat_rouge, tmp_mat_vert, false, modele_w, modele_h);
+
+			// todo : make histogramme from feature_fileName
+			histo_models_db[idx].histo = do_histogramme(tmp_img_ng, modele_w, modele_h);
+			histo_models_db[idx].type = (feature_type_t)i;
+			debugPrint("- %s\t histo saved it into : histo_db[%u] (%p)\n", feature_fileName, idx, &(histo_models_db[i]));
+			if (!(histo_models_db[idx].histo)) {
 				error("*** histo_db[%u].histo is NULL ! Going to the next element overwriting histo_db[%d] ... ***\n", idx, idx);
 			} else {
 				idx++;
 			}
+			
 		}
 		changeDirectory("..");
 	}
 	changeDirectory("..");
-
+	
 	secure_free(feature_fileName);
 	secure_free(feature_dirName);
+
+	free_u16_mat(tmp_img_ng, modele_h);
+	free_u16_mat(tmp_mat_bleu, modele_h);
+	free_u16_mat(tmp_mat_rouge, modele_h);
+	free_u16_mat(tmp_mat_vert, modele_h);
+	
+	libereDonneesImageRGB(&tmp_img_rgb);
 
 	return idx; // count
 }
 
-uint compare_two_histograms(uint* histo1, uint* histo2)
+uint compare_two_histograms(uint* h1, uint* h2)
 {
-	uint val; // ressemblance value;
+	int i;
+	double tmp, result = 0; // similarity value;
 
-	//debug
-	val = 0;
+	// Chi-Squared comparison method.
+	for (i = 0; i < GRAYLEVELS; i++) {
+		tmp = (double)h1[i] - (double)h2[i];
+		if (h1[i] > 0)
+			result += ((double)(tmp*tmp) / (double)h1[i]);
+	}
 
-	return val;
+	return (uint)(result);
 }
 
-// todo : change type
-void compare_histo_with_models(uint* histo)
+
+histo_ownImage_t* compare_histo_with_models(uint* histo)
 {
-	/* En résumé :
-	 * new histo_modele;
-	 * int tmp, bestFit
-	 * 
-	 * bestFit = 0
-	 * bestType = ""
-	 * 
-	 *     tmp = compare_two_histograms(histo_modele, histo)
-	 *     if (tmp>bestFit) { 
-	 *         bestFit = tmp;
-	 *         bestType = type;
-	 *     }
-	 * }
-	 * 
-	 * printf stuff.
-	 *
-	 **/
+	uint i, tmp;
+	
+	// todo : set minimum similarity value ?
+	
+	histo_ownImage_t* match = (histo_ownImage_t*)malloc(sizeof(histo_ownImage_t));
+	if (!match) return NULL;
+
+	match->histo = histo;
+	match->reliability = 0;
+	match->type = feat_VOID;
+	
+	for (i = 0; i < histo_db_size; i++) {
+		tmp = compare_two_histograms(histo_models_db[i].histo, histo);
+		if (tmp > match->reliability) {
+			error("(%d) better reliability : %u\n", i, tmp);
+			match->reliability = tmp;
+			match->type = histo_models_db[i].type;
+		}
+	}
+
+	return match;
 }
 
 u16** get_subimage(u16** src, int src_w, int src_h, int x, int y, int w, int h)
@@ -366,14 +429,17 @@ u16** get_subimage(u16** src, int src_w, int src_h, int x, int y, int w, int h)
 }
 
 // retourne le nombre de sous-images extraites
-uint extract_subimages_and_save(u16** image_ng, int width, int height)
+uint extract_subimages_and_compare(u16** image_ng, int width, int height)
 {
 	int i, j;
-	uint tmp, counter = 0;
+	uint k;
+
+	histo_ownImage_t* tmp = NULL;
+	uint counter = 0;
 	uint nbr_sub_x = 5;
 	uint sub_size = (uint)roundf(((float)width / (float)nbr_sub_x)); // == width == height (square)
 	int loop_step = sub_size >> 1; // génération d'une sous-image à chaque taille/2.
-	uint nbr_sub_y = (uint)roundf(((float)height / (float)sub_size));
+	// uint nbr_sub_y = (uint)roundf(((float)height / (float)sub_size));
 
 	u16** sub = NULL;
 	uint* sub_histo = NULL;
@@ -386,19 +452,38 @@ uint extract_subimages_and_save(u16** image_ng, int width, int height)
 
 	DonneesImageRGB* dest_imgRGB = new_ImageRGB(sub_size, sub_size);
 	DonneesImageRGB* sub_histo_img = NULL;
-	
+
+	// calloc so that every field is set to 0
+	histo_ownImage_db = (histo_ownImage_t*)calloc(histo_ownImage_db_size, sizeof(histo_ownImage_t));
+	if (!histo_ownImage_db) return 0;
+	for (k = 0; k < histo_ownImage_db_size; k++)
+		if (!(histo_ownImage_db[k].histo = new_histo()))
+			return 0;
+
 	for (j = 0; j < height - 2*loop_step; j += loop_step) {
 		for (i = 0; i < width - 2*loop_step; i += loop_step) {
 
 			sub = get_subimage(image_ng, width, height, i, j, sub_size, sub_size);
 			if (!sub) return counter;
+
 			sprintf(sub_filename, "%s_sub_%d_%d_%u.bmp", nomFichier, j, i, sub_size);
 			sauveImageNG(dest_imgRGB, sub);
 			ecrisBMPRGB_Dans(dest_imgRGB, sub_filename);
 
 			sub_histo = do_histogramme(sub, sub_size, sub_size);
+			
+			tmp = compare_histo_with_models(sub_histo);
 
-			// Todo : compare stuff.
+			if (tmp->type != feat_VOID) {
+				if (tmp->reliability > histo_ownImage_db[(int)tmp->type].reliability) {
+					debugPrint("found better match of type %d (score : %u)!\n", tmp->type, tmp->reliability);
+					memcpy(histo_ownImage_db[(int)tmp->type].histo, tmp->histo, GRAYLEVELS*sizeof(uint));
+					histo_ownImage_db[(int)tmp->type].reliability = tmp->reliability;
+					histo_ownImage_db[(int)tmp->type].type = tmp->type;
+					histo_ownImage_db[(int)tmp->type].x = i;
+					histo_ownImage_db[(int)tmp->type].y = j;
+				}
+			}
 
 			//sprintf(sub_filename, "%s_sub_%d_%d_%u_histo.bin", nomFichier, j, i, sub_size);
 			//writeHistoToFile(sub_filename, sub_histo);
@@ -409,9 +494,7 @@ uint extract_subimages_and_save(u16** image_ng, int width, int height)
 			secure_free(sub_histo);
 			libereDonneesImageRGB(&sub_histo_img);
 
-			for (tmp = 0; tmp < sub_size; tmp++)
-				secure_free(sub[tmp]);
-			secure_free(sub);
+			free_u16_mat(sub, sub_size);
 			
 			counter++;
 		}
@@ -419,17 +502,32 @@ uint extract_subimages_and_save(u16** image_ng, int width, int height)
 
 	changeDirectory("..");
 
+	printf("Best matches : \n");
+	for (k = 0; k < histo_ownImage_db_size; k++) {
+		i = histo_ownImage_db[k].x;
+		j = histo_ownImage_db[k].y;
+		printf("At (%u,%u) : type %u (score : %u)\n", i, j, histo_ownImage_db[k].type, histo_ownImage_db[k].reliability);
+		sub = get_subimage(image_ng, width, height, i, j, sub_size, sub_size);
+		sprintf(sub_filename, "%s_sub_%d_%d_%u_bestMatch_%u.bmp", nomFichier, j, i, sub_size, histo_ownImage_db[k].type);
+		sauveImageNG(dest_imgRGB, sub);
+		ecrisBMPRGB_Dans(dest_imgRGB, sub_filename);
+	}
+
+
+	for (k = 0; k < histo_ownImage_db_size; k++)
+		secure_free(histo_ownImage_db[k].histo);
+	secure_free(histo_ownImage_db);
+
 	secure_free(sub_filename);
+
+	libereDonneesImageRGB(&dest_imgRGB);
 
 	return counter;
 }
 
 void choixAction(int choix)
 {
-	int i;
-
 	static bool isDoingAll = false;
-
 	bool end = (choix == 0);
 
 	while (!end) {
@@ -438,10 +536,9 @@ void choixAction(int choix)
 		image_ng = couleur2NG(matrice_bleue, matrice_rouge, matrice_verte, false);
 
 		tmp_ng1 = apply_filter(image_ng, filters[flt_Median]);
-		for (i = 0; i < img_h; i++) {
-			if (image_ng) secure_free(image_ng[i]);
-		}
-		secure_free(image_ng);
+		
+		free_u16_mat(image_ng, img_h);
+
 		image_ng = tmp_ng1;
 		tmp_ng1 = NULL;
 
@@ -453,7 +550,7 @@ void choixAction(int choix)
 			printf("******************************\n");
 			printf("**** Bertrand - Debournoux ***\n");
 			printf("******* Biometrie - LBP ******\n");
-			printf("***** v1.17 - 22/02/2014 *****\n");
+			printf("***** v1.20 - 25/02/2014 *****\n");
 			printf("******************************\n\n");
 			printf("Image en cours : %s\n\n", nomFichier);
 			printf("******************************\n\n");
@@ -503,9 +600,8 @@ void choixAction(int choix)
 			break;
 		case 5:
 			tmp_ng1 = apply_filter(image_ng, filters[flt_LBP]);
-			sauveImageNG(image, tmp_ng1);
-			saveBMPwithCurrentName(image, "lbp.bmp");
-			int counter = extract_subimages_and_save(tmp_ng1, img_w, img_h);
+			if (histo_db_size == 0) histo_db_size = make_histo_db();
+			int counter = extract_subimages_and_compare(tmp_ng1, img_w, img_h);
 			debugPrint("counter : %d\n", counter);
 			break;
 		case 10:
@@ -521,16 +617,12 @@ void choixAction(int choix)
 			break;
 		}
 
-		for (i = 0; i < img_h; i++) {
-			if (image_ng) secure_free(image_ng[i]);
-			if (tmp_ng1) secure_free(tmp_ng1[i]);
-			if (tmp_ng2) secure_free(tmp_ng2[i]);
-			if (tmp_ng3) secure_free(tmp_ng3[i]);
-		}
-		secure_free(image_ng);
-		secure_free(tmp_ng1);
-		secure_free(tmp_ng2);
-		secure_free(tmp_ng3);
+		free_u16_mat(image_ng, img_h);
+		// to avoid useless calls
+		if (tmp_ng1) free_u16_mat(tmp_ng1, img_h);
+		if (tmp_ng2) free_u16_mat(tmp_ng2, img_h);
+		if (tmp_ng3) free_u16_mat(tmp_ng3, img_h);
+
 		libereDonneesImageRGB(&histo_img);
 		libereDonneesImageRGB(&tmp_img);
 
@@ -577,27 +669,22 @@ void initData(int argc, char *argv[])
 
 	filters = createFilters();
 
-	int i;
-
+	
 	img_w = image->largeurImage;
 	img_h = image->hauteurImage;
 
-	matrice_rouge = (u16**)malloc(img_h * sizeof(u16*));
-	matrice_verte = (u16**)malloc(img_h * sizeof(u16*));
-	matrice_bleue = (u16**)malloc(img_h * sizeof(u16*));
-	if (!(matrice_rouge && matrice_verte && matrice_bleue)) exit(-1);
-
-	for (i = 0; i < img_h; i++) {
-		matrice_rouge[i] = (u16*)malloc(img_w * sizeof(u16));
-		matrice_verte[i] = (u16*)malloc(img_w * sizeof(u16));
-		matrice_bleue[i] = (u16*)malloc(img_w * sizeof(u16));
-	}
-	if (!(matrice_rouge[0] && matrice_verte[0] && matrice_bleue[0]))
-		exit(-1);
+	matrice_bleue = new_u16_mat(img_w, img_h);
+	matrice_rouge = new_u16_mat(img_w, img_h);
+	matrice_verte = new_u16_mat(img_w, img_h);
+	if (!(matrice_verte[img_w - 1])) exit(-1); // check last alloc
+	
 }
 
-void freeStuff()
+void freeStuff(void)
 {
+
+	// todo : free histo_models_db et histo_ownImage_db
+
 	int i;
 	for (i = 0; i < NBR_FILTRES; i++)
 		freeFilter(filters[i]);
@@ -605,14 +692,10 @@ void freeStuff()
 
 	secure_free(nomFichier);
 
-	for (i = 0; i < img_h; i++) {
-		if (matrice_bleue) secure_free(matrice_bleue[i]);
-		if (matrice_rouge) secure_free(matrice_rouge[i]);
-		if (matrice_verte) secure_free(matrice_verte[i]);
-	}
-	secure_free(matrice_bleue);
-	secure_free(matrice_rouge);
-	secure_free(matrice_verte);
+	free_u16_mat(matrice_bleue, img_h);
+	free_u16_mat(matrice_rouge, img_h);
+	free_u16_mat(matrice_verte, img_h);
+
 	libereDonneesImageRGB(&image);
 	libereDonneesImageRGB(&image_orig);
 }
@@ -623,7 +706,7 @@ int MAIN_NAME(int argc, char *argv[])
 	setlocale(LC_ALL, ""); // support unicode
 
 	initData(argc, argv);
-
+	
 	choixAction(-1);
 
 	freeStuff();

@@ -13,12 +13,15 @@
 /**
 * \brief	Getter pour le wrapper C++
 */
-string getLatestSavedImageName();
+string getLatestSavedImageName(void);
 
 int strEndsWith(const char *str, const char *suffix);
 
 int array_min_idx(int* arr, int size);
 int array_max_idx(int* arr, int size);
+
+u16** new_u16_mat(uint colonnes, uint lignes);
+void free_u16_mat(u16** mat, uint lignes);
 
 DonneesImageRGB* new_ImageRGB(uint colonnes, uint lignes);
 
@@ -30,5 +33,4 @@ void changeDirectory(const string name);
 
 uint* readHistoFromFile(const string filename);
 int writeHistoToFile(const string filename, uint* histo);
-
 #endif

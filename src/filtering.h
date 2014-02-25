@@ -1,6 +1,6 @@
 // Adrien Bertrand
 // Biométrie - LBP
-// v1.17 - 22/02/2014
+// v1.20 - 25/02/2014
 
 #ifndef __FILTERING_H__
 #define __FILTERING_H__
@@ -61,7 +61,7 @@ void matrix_copy(int** dest, int** src, uint cols, uint rows);
 * \details	Crée le tableau de pointeur de filtres définis dans @ref _filters_types
 * \return   Pointeur vers le tableau
 */
-filter_t** createFilters();
+filter_t** createFilters(void);
 
 
 #endif
