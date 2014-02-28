@@ -66,9 +66,23 @@ DonneesImageRGB* new_ImageRGB(uint colonnes, uint lignes)
 	return imageRGB;
 }
 
+DonneesImageRGB* clone_imageRGB(DonneesImageRGB * image_orig)
+{
+	DonneesImageRGB* img = NULL;
+	img = (DonneesImageRGB*)malloc(sizeof(DonneesImageRGB));
+	if (!img) return NULL;
+	img->donneesRGB = (uchar*)calloc(image_orig->hauteurImage * image_orig->largeurImage * 3, sizeof(uchar));
+	if (!img->donneesRGB) return NULL;
+	memcpy(img->donneesRGB, image_orig->donneesRGB, image_orig->hauteurImage * image_orig->largeurImage * 3);
+	img->hauteurImage = image_orig->hauteurImage;
+	img->largeurImage = image_orig->largeurImage;
+
+	return img;
+}
+
 void do_saveBMPwithName(DonneesImageRGB * image, const string name, const string suffix)
 {
-	secure_free(latestSavedImageName);
+	if (latestSavedImageName) secure_free(latestSavedImageName);
 
 	uint len = strlen(name) + strlen(suffix) + 2;
 	latestSavedImageName = (string)calloc(len, sizeof(char));

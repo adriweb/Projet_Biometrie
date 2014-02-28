@@ -1,6 +1,6 @@
 // Adrien Bertrand
 // Biométrie - LBP
-// v1.20 - 25/02/2014
+// v1.3 - 28/02/2014
 
 #ifndef __COMMON_H__
 #define __COMMON_H__
@@ -39,8 +39,6 @@ typedef char*	string; // for the lulz
 #define INT_MAX       2147483647        /* maximum (signed) int value */
 #endif
 
-// float.h
-#define FLT_EPSILON     1.192092896e-07F
 
 /**
 * \brief	no-VS compatibility stuff ("secure" functions)
@@ -51,12 +49,12 @@ typedef char*	string; // for the lulz
 #define strcpy_s(a,b,c)		strncpy((a),(c),(b))
 #define sprintf_s(a,b,c)	snprintf((a),(b),(c))
 #define MAIN_NAME			main
+#define __inline			inline
 #endif
 
 #define NUMARGS(...)  (sizeof((int[]){__VA_ARGS__})/sizeof(int))
 
-// from chromium
-#define array_count(x) ((sizeof(x)/sizeof(0[x])) / ((size_t)(!(sizeof(x) % sizeof(0[x])))))
+#define array_count(x) (sizeof(x)/sizeof(0[x]))
 
 #define GRAYLEVELS	256
 
@@ -71,10 +69,12 @@ typedef char*	string; // for the lulz
 #define debugPrint(...)
 #endif
 
+#define ABS(x)	(((x)<0) ? (-x) : (x))
+
 /**
 * \brief	free(NULL) shouldn't be an issue on decent compilers, but on others... Also, sets to NULL the freed pointer.
 */
-#define secure_free(x)	do { if ((x)) { free((x)); (x) = NULL; } else { error("Trying to free NULL (%s) at line %d (%s)\n", #x, __LINE__, __FUNCTION__); } } while(0)
+#define secure_free(x)	do { if ((x)) { free((x)); (x) = NULL; } else { debugPrint("Warning ! Tried to free NULL (%s) at line %d (%s)\n", #x, __LINE__, __FUNCTION__); } } while(0)
 
 /**
 * \brief	Sachant que R=G=B pour les niveaux de gris, on utilise la fonction générale avec les 3 mêmes paramètres.

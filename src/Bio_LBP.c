@@ -1,10 +1,13 @@
 ﻿// Adrien Bertrand
 // Biométrie - LBP
-// v1.20 - 25/02/2014
+// v1.3 - 28/02/2014
 
 #include "Bio_LBP.h"
 #include "filtering.h"
 #include "utils.h"
+
+
+// TODO : check distance between face features to make sure it's a face.
 
 
 /*  --------- Petites variables globales et pointeurs globaux ---------  */
@@ -33,6 +36,7 @@ histo_ownImage_t* histo_ownImage_db;
 
 /*  --------- Fonctions ---------  */
 
+
 void cree3matrices(u16** mat_bleue, u16** mat_rouge, u16** mat_verte, DonneesImageRGB* image) {
 	int i, j, k = 0;
 	for (j = 0; j < image->hauteurImage; j++) {
@@ -57,7 +61,7 @@ void creeImage(DonneesImageRGB* image, u16** mat_bleue, u16** mat_rouge, u16** m
 
 void negatifImage(u16** mat_bleue, u16** mat_rouge, u16** mat_verte) {
 	int i, j;
-#pragma omp parallel for
+//#pragma omp parallel for
 	for (j = 0; j < img_h; j++) {
 		for (i = 0; i < img_w; i++) {
 			mat_rouge[j][i] = 255 - mat_rouge[j][i];
@@ -94,7 +98,7 @@ u16** couleur2NG(u16** mat_bleue, u16** mat_rouge, u16** mat_verte, bool percept
 void seuilleImageNG(u16** imageNG, uint seuil)
 {
 	int i, j = 0;
-#pragma omp parallel for
+//#pragma omp parallel for
 	for (j = 0; j < img_h; j++)
 	for (i = 0; i < img_w; i++)
 		imageNG[j][i] = (imageNG[j][i] > seuil) ? 255 : 0;
@@ -161,7 +165,7 @@ DonneesImageRGB* imageHistogramme(uint* histo)
 	uint* histoNorm = new_histo();
 	if (!histoNorm) return NULL;
 
-#pragma omp parallel for
+//#pragma omp parallel for
 	for (i = 0; i < GRAYLEVELS; i++)
 		histoNorm[i] = (uint)(histo[i] / ratio); // normalisation
 
@@ -240,7 +244,7 @@ u16 ** paletteReduction(u16 ** src, int levelsAmount)
 	// palette init
 	u16* levels = (u16*)malloc((levelsAmount + 1) * sizeof(u16));
 	if (!levels) return NULL;
-#pragma omp parallel for
+//#pragma omp parallel for
 	for (i = 0; i < levelsAmount + 1; i++)
 		levels[i] = (u16)(i * interval);
 	levels[levelsAmount] = 255;
@@ -254,7 +258,7 @@ u16 ** paletteReduction(u16 ** src, int levelsAmount)
 	for (j = 0; j < img_h; j++) {
 		reduced[j] = (u16*)calloc(img_w, sizeof(u16)); // will make everything mm_default (0)
 		if (!reduced[j]) return NULL;
-#pragma omp parallel for
+//#pragma omp parallel for
 		for (i = 0; i < img_w; i++)
 		for (k = 0; k < levelsAmount + 1; k++)
 		if ((src[j][i] >= levels[k] - (k>0 ? half_interval + 0.5 : 0)) && (src[j][i] < levels[k] + half_interval + 0.5))
@@ -295,18 +299,16 @@ uint make_histo_db(void)
 	uint modele_w, modele_h;
 
 	u16** tmp_img_ng = NULL;
+	u16** tmp_img_ng_lbp = NULL;
 	u16** tmp_mat_rouge = NULL;
 	u16** tmp_mat_vert = NULL;
 	u16** tmp_mat_bleu = NULL;
 
 	string feature_dirs[] = { "bouche", "nez", "oeild", "oeilg" };
+	// same order as the _feature_type_t enum
 	const uint nbr_features = array_count(feature_dirs);
 
-	error("nbr_features : %u\n", nbr_features);
-
-	// same order as the _feature_type_t enum
-
-	const uint nbr_samples = 1; // for each directory (feature).
+	const uint nbr_samples = 8; // max models for each feature directory
 	// todo : find out this number by reading the directories.
 
 	// array of _histo_model_t
@@ -318,6 +320,7 @@ uint make_histo_db(void)
 	if (!feature_fileName || !feature_dirName) return 0;
 	
 	changeDirectory("modeles");
+
 	for (i = 0; i < nbr_features; i++) {
 		strcpy_s(feature_dirName, strlen(feature_dirs[i])+1, feature_dirs[i]);
 		changeDirectory(feature_dirName);
@@ -326,23 +329,24 @@ uint make_histo_db(void)
 
 			if (tmp_img_rgb) libereDonneesImageRGB(&tmp_img_rgb);
 			tmp_img_rgb = lisBMPRGB(feature_fileName);
-			if (!)
+			if (!tmp_img_rgb) continue;
+
 			modele_w = tmp_img_rgb->largeurImage;
 			modele_h = tmp_img_rgb->hauteurImage;
 
-			// only malloc once...
-			if (!tmp_mat_bleu) {
-				tmp_mat_bleu = new_u16_mat(modele_w, modele_h);
-				tmp_mat_rouge = new_u16_mat(modele_w, modele_h);
-				tmp_mat_vert = new_u16_mat(modele_w, modele_h);
-				if (!(tmp_mat_vert[modele_w - 1])) return 0;
-			}
+			tmp_mat_bleu = new_u16_mat(modele_w, modele_h);
+			tmp_mat_rouge = new_u16_mat(modele_w, modele_h);
+			tmp_mat_vert = new_u16_mat(modele_w, modele_h);
+			if (!(tmp_mat_vert[modele_h - 1])) return 0;
 			
 			cree3matrices(tmp_mat_bleu, tmp_mat_rouge, tmp_mat_vert, tmp_img_rgb);
 			if (tmp_img_ng) secure_free(tmp_img_ng);
 			tmp_img_ng = do_couleur2NG(tmp_mat_bleu, tmp_mat_rouge, tmp_mat_vert, false, modele_w, modele_h);
 
-			// todo : make histogramme from feature_fileName
+			free_u16_mat(tmp_mat_bleu, modele_h);
+			free_u16_mat(tmp_mat_rouge, modele_h);
+			free_u16_mat(tmp_mat_vert, modele_h);
+
 			histo_models_db[idx].histo = do_histogramme(tmp_img_ng, modele_w, modele_h);
 			histo_models_db[idx].type = (feature_type_t)i;
 			debugPrint("- %s\t histo saved it into : histo_db[%u] (%p)\n", feature_fileName, idx, &(histo_models_db[i]));
@@ -361,9 +365,6 @@ uint make_histo_db(void)
 	secure_free(feature_dirName);
 
 	free_u16_mat(tmp_img_ng, modele_h);
-	free_u16_mat(tmp_mat_bleu, modele_h);
-	free_u16_mat(tmp_mat_rouge, modele_h);
-	free_u16_mat(tmp_mat_vert, modele_h);
 	
 	libereDonneesImageRGB(&tmp_img_rgb);
 
@@ -373,13 +374,23 @@ uint make_histo_db(void)
 uint compare_two_histograms(uint* h1, uint* h2)
 {
 	int i;
-	double tmp, result = 0; // similarity value;
+	double tmp, result = 0; // distance value;
+
+	uint max_h1 = h1[array_max_idx((int*)h1, GRAYLEVELS)];
+	uint max_h2 = h2[array_max_idx((int*)h2, GRAYLEVELS)];
+	double ratio1, ratio2;
+	ratio1 = 1.0; ratio2 = 1.0;
+	if (max_h1 > max_h2) {
+		ratio2 = (double)max_h1 / (double)max_h2;
+	} else {
+		ratio1 = (double)max_h2 / (double)max_h1;
+	}
 
 	// Chi-Squared comparison method.
 	for (i = 0; i < GRAYLEVELS; i++) {
-		tmp = (double)h1[i] - (double)h2[i];
-		if (h1[i] > 0)
-			result += ((double)(tmp*tmp) / (double)h1[i]);
+		tmp = (double)(h1[i] * ratio1) - (double)(h2[i] * ratio2);
+		if ((h1[i] * ratio1) > 0)
+			result += ((double)(tmp*tmp) / (double)(h1[i] * ratio1));
 	}
 
 	return (uint)(result);
@@ -396,14 +407,13 @@ histo_ownImage_t* compare_histo_with_models(uint* histo)
 	if (!match) return NULL;
 
 	match->histo = histo;
-	match->reliability = 0;
+	match->distance = UINT_MAX;
 	match->type = feat_VOID;
 	
 	for (i = 0; i < histo_db_size; i++) {
 		tmp = compare_two_histograms(histo_models_db[i].histo, histo);
-		if (tmp > match->reliability) {
-			error("(%d) better reliability : %u\n", i, tmp);
-			match->reliability = tmp;
+		if (tmp < match->distance) {
+			match->distance = tmp;
 			match->type = histo_models_db[i].type;
 		}
 	}
@@ -428,27 +438,22 @@ u16** get_subimage(u16** src, int src_w, int src_h, int x, int y, int w, int h)
 	return sub;
 }
 
-// retourne le nombre de sous-images extraites
-uint extract_subimages_and_compare(u16** image_ng, int width, int height)
+face_feat_t* extract_subimages_and_compare(u16** image_ng, int width, int height)
 {
 	int i, j;
 	uint k;
 
+	face_feat_t* face_features = NULL;
+
 	histo_ownImage_t* tmp = NULL;
-	uint counter = 0;
-	uint nbr_sub_x = 5;
-	uint sub_size = (uint)roundf(((float)width / (float)nbr_sub_x)); // == width == height (square)
-	int loop_step = sub_size >> 1; // génération d'une sous-image à chaque taille/2.
-	// uint nbr_sub_y = (uint)roundf(((float)height / (float)sub_size));
+	uint nbr_sub = 5;
+	uint sub_size = (uint)roundf(((float)(width<height ? width : height) / (float)nbr_sub));
+	int loop_step = sub_size >> 2; // génération d'une sous-image à chaque taille/2.
 
 	u16** sub = NULL;
 	uint* sub_histo = NULL;
 	string sub_filename = NULL;
 	sub_filename = calloc(strlen(nomFichier) + 35, sizeof(char)); // +15 => "_sub_x_y_w.bmp" + "histo" + extra safety
-
-	sprintf(sub_filename, "%s_sub_images", nomFichier);
-	createDirectory(sub_filename);
-	changeDirectory(sub_filename);
 
 	DonneesImageRGB* dest_imgRGB = new_ImageRGB(sub_size, sub_size);
 	DonneesImageRGB* sub_histo_img = NULL;
@@ -456,63 +461,64 @@ uint extract_subimages_and_compare(u16** image_ng, int width, int height)
 	// calloc so that every field is set to 0
 	histo_ownImage_db = (histo_ownImage_t*)calloc(histo_ownImage_db_size, sizeof(histo_ownImage_t));
 	if (!histo_ownImage_db) return 0;
-	for (k = 0; k < histo_ownImage_db_size; k++)
+	for (k = 0; k < histo_ownImage_db_size; k++) {
 		if (!(histo_ownImage_db[k].histo = new_histo()))
 			return 0;
+		histo_ownImage_db[k].distance = UINT_MAX;
+	}
 
 	for (j = 0; j < height - 2*loop_step; j += loop_step) {
 		for (i = 0; i < width - 2*loop_step; i += loop_step) {
 
 			sub = get_subimage(image_ng, width, height, i, j, sub_size, sub_size);
-			if (!sub) return counter;
+			if (!sub) return NULL;
 
-			sprintf(sub_filename, "%s_sub_%d_%d_%u.bmp", nomFichier, j, i, sub_size);
-			sauveImageNG(dest_imgRGB, sub);
-			ecrisBMPRGB_Dans(dest_imgRGB, sub_filename);
+			//sprintf(sub_filename, "%s_sub_%d_%d_%u.bmp", nomFichier, j, i, sub_size);
+			//sauveImageNG(dest_imgRGB, sub);
+			//ecrisBMPRGB_Dans(dest_imgRGB, sub_filename);
 
 			sub_histo = do_histogramme(sub, sub_size, sub_size);
 			
 			tmp = compare_histo_with_models(sub_histo);
 
 			if (tmp->type != feat_VOID) {
-				if (tmp->reliability > histo_ownImage_db[(int)tmp->type].reliability) {
-					debugPrint("found better match of type %d (score : %u)!\n", tmp->type, tmp->reliability);
+				if (tmp->distance < histo_ownImage_db[(int)tmp->type].distance) {
+					//debugPrint("found better match of type %d (score : %u)!\n", tmp->type, tmp->reliability);
 					memcpy(histo_ownImage_db[(int)tmp->type].histo, tmp->histo, GRAYLEVELS*sizeof(uint));
-					histo_ownImage_db[(int)tmp->type].reliability = tmp->reliability;
+					histo_ownImage_db[(int)tmp->type].distance = tmp->distance;
 					histo_ownImage_db[(int)tmp->type].type = tmp->type;
 					histo_ownImage_db[(int)tmp->type].x = i;
 					histo_ownImage_db[(int)tmp->type].y = j;
 				}
 			}
 
-			//sprintf(sub_filename, "%s_sub_%d_%d_%u_histo.bin", nomFichier, j, i, sub_size);
-			//writeHistoToFile(sub_filename, sub_histo);
-			
-			//sub_histo_img = imageHistogramme(sub_histo);
-			//do_saveBMPwithName(sub_histo_img, sub_filename, "histogramme.bmp");
-
 			secure_free(sub_histo);
 			libereDonneesImageRGB(&sub_histo_img);
 
 			free_u16_mat(sub, sub_size);
-			
-			counter++;
 		}
 	}
 
-	changeDirectory("..");
+	string features_tmp[] = { "bouche", "nez", "oeild", "oeilg" };
 
-	printf("Best matches : \n");
+	printf("Best matches saved.\n");
 	for (k = 0; k < histo_ownImage_db_size; k++) {
 		i = histo_ownImage_db[k].x;
 		j = histo_ownImage_db[k].y;
-		printf("At (%u,%u) : type %u (score : %u)\n", i, j, histo_ownImage_db[k].type, histo_ownImage_db[k].reliability);
+		debugPrint("At (%u,%u) : type %u (score : %u)\n", i, j, histo_ownImage_db[k].type, histo_ownImage_db[k].distance);
 		sub = get_subimage(image_ng, width, height, i, j, sub_size, sub_size);
-		sprintf(sub_filename, "%s_sub_%d_%d_%u_bestMatch_%u.bmp", nomFichier, j, i, sub_size, histo_ownImage_db[k].type);
+		sprintf(sub_filename, "%s_%s.bmp", nomFichier, features_tmp[histo_ownImage_db[k].type]);
 		sauveImageNG(dest_imgRGB, sub);
 		ecrisBMPRGB_Dans(dest_imgRGB, sub_filename);
 	}
 
+	face_features = (face_feat_t*)calloc(histo_ownImage_db_size, sizeof(face_feat_t));
+	for (k = 0; k < histo_ownImage_db_size; k++) {
+		face_features[k].size = sub_size;
+		face_features[k].type = histo_ownImage_db[k].type;
+		face_features[k].x = histo_ownImage_db[k].x;
+		face_features[k].y = histo_ownImage_db[k].y;
+	}
 
 	for (k = 0; k < histo_ownImage_db_size; k++)
 		secure_free(histo_ownImage_db[k].histo);
@@ -522,13 +528,121 @@ uint extract_subimages_and_compare(u16** image_ng, int width, int height)
 
 	libereDonneesImageRGB(&dest_imgRGB);
 
-	return counter;
+	return face_features;
+}
+
+// will handle colors later
+void drawPixelOnImage(uint x, uint y, DonneesImageRGB* img)
+{
+	unsigned long int i = getIfromXYinImage(img, x, y);
+	if (i > (unsigned long int)(3 * img->largeurImage*img->hauteurImage)) return;
+	img->donneesRGB[i] = 0;		// b
+	img->donneesRGB[i+1] = 0;	// g
+	img->donneesRGB[i+2] = 255; // r
+}
+
+// Bressenham line drawing algorithm
+// adapted from http://cboard.cprogramming.com/game-programming/67832-line-drawing-algorithm.html#post485086
+void drawLineOnImage(uint x1, uint y1, uint x2, uint y2, DonneesImageRGB* img)
+{
+	int dx, dy, inx, iny, e;
+
+	dx = x2 - x1;
+	dy = y2 - y1;
+	inx = dx > 0 ? 1 : -1;
+	iny = dy > 0 ? 1 : -1;
+
+	dx = ABS(dx);
+	dy = ABS(dy);
+
+	if (dx >= dy) {
+		dy <<= 1;
+		e = dy - dx;
+		dx <<= 1;
+		while (x1 != x2) {
+			drawPixelOnImage(x1, y1, img);
+			if (e >= 0) {
+				y1 += iny;
+				e -= dx;
+			}
+			e += dy; x1 += inx;
+		}
+	} else {
+		dx <<= 1;
+		e = dx - dy;
+		dy <<= 1;
+		while (y1 != y2) {
+			drawPixelOnImage(x1, y1, img);
+			if (e >= 0) {
+				x1 += inx;
+				e -= dy;
+			}
+			e += dx; y1 += iny;
+		}
+	}
+	drawPixelOnImage(x1, y1, img);
+}
+
+void drawRectangleOnImage(const rect_t* rect, DonneesImageRGB* img)
+{
+	drawLineOnImage(rect->x, rect->y, rect->x + rect->w, rect->y, img); // top
+	drawLineOnImage(rect->x, rect->y, rect->x, rect->y + rect->h, img); // left
+	drawLineOnImage(rect->x, rect->y + rect->h, rect->x + rect->w, rect->y + rect->h, img); // bottom
+	drawLineOnImage(rect->x + rect->w, rect->y, rect->x + rect->w, rect->y + rect->h, img); // right
+}
+
+void mark_face_features(DonneesImageRGB* image_orig, face_feat_t* face_features)
+{
+	uint k;
+	uint xmin, ymin, xmax, ymax;
+
+	rect_t tmp_rect, face_rect;
+	string fileName = NULL;
+	DonneesImageRGB* img = NULL;
+	
+	img = clone_imageRGB(image_orig);
+	if (!img) return;
+
+	xmin = ymin = UINT_MAX;
+	xmax = ymax = 0;
+
+	for (k = 0; k < histo_ownImage_db_size; k++) {
+		if (face_features[k].x == 0 && face_features[k].y == 0) {
+			debugPrint("ignoring a probably badly-detected feature (%d)\n", k);
+			continue;
+		}
+		tmp_rect = (rect_t){ face_features[k].x, face_features[k].y, face_features[k].size, face_features[k].size };
+		drawRectangleOnImage(&tmp_rect, img);
+		if (face_features[k].x < xmin) xmin = face_features[k].x;
+		if (face_features[k].y < ymin) ymin = face_features[k].y;
+		if (face_features[k].x > xmax) xmax = face_features[k].x;
+		if (face_features[k].y > ymax) ymax = face_features[k].y;
+	}
+
+	int size = face_features[0].size;
+	face_rect.x = xmin - (size >> 1);
+	face_rect.y = ymin - (uint)((double)size/1.5);
+	face_rect.w = (xmax - xmin) + size * 2;
+	face_rect.h = (ymax - ymin) + (uint)(size * 2.5);
+
+	drawRectangleOnImage(&face_rect, img);
+
+	fileName = (string)calloc(strlen(nomFichier) + 10, sizeof(char));
+	if (!fileName) return;
+
+	sprintf_s(fileName, strlen(nomFichier)+10, "%s_face.bmp", nomFichier);
+	ecrisBMPRGB_Dans(img, fileName);
+
+	secure_free(fileName);
+	libereDonneesImageRGB(&img);
 }
 
 void choixAction(int choix)
 {
 	static bool isDoingAll = false;
 	bool end = (choix == 0);
+
+	face_feat_t* face_features = NULL;
 
 	while (!end) {
 
@@ -550,7 +664,7 @@ void choixAction(int choix)
 			printf("******************************\n");
 			printf("**** Bertrand - Debournoux ***\n");
 			printf("******* Biometrie - LBP ******\n");
-			printf("***** v1.20 - 25/02/2014 *****\n");
+			printf("***** v1.3 - 28/02/2014 *****\n");
 			printf("******************************\n\n");
 			printf("Image en cours : %s\n\n", nomFichier);
 			printf("******************************\n\n");
@@ -601,8 +715,9 @@ void choixAction(int choix)
 		case 5:
 			tmp_ng1 = apply_filter(image_ng, filters[flt_LBP]);
 			if (histo_db_size == 0) histo_db_size = make_histo_db();
-			int counter = extract_subimages_and_compare(tmp_ng1, img_w, img_h);
-			debugPrint("counter : %d\n", counter);
+			face_features = extract_subimages_and_compare(tmp_ng1, img_w, img_h);
+			debugPrint("Marking detected face features on image.\n");
+			mark_face_features(image_orig, face_features);
 			break;
 		case 10:
 			printf("Making Models DB ...\n");
@@ -622,6 +737,7 @@ void choixAction(int choix)
 		if (tmp_ng1) free_u16_mat(tmp_ng1, img_h);
 		if (tmp_ng2) free_u16_mat(tmp_ng2, img_h);
 		if (tmp_ng3) free_u16_mat(tmp_ng3, img_h);
+		if (face_features) secure_free(face_features);
 
 		libereDonneesImageRGB(&histo_img);
 		libereDonneesImageRGB(&tmp_img);
@@ -655,7 +771,6 @@ void initData(int argc, char *argv[])
 		printf("Image name doesn't contain the extension, adding it...\n");
 		strcat(nomFichier, ".bmp");
 	}
-
 	if (!(image = lisBMPRGB(nomFichier))) {
 		error("Erreur de lecture, fermeture... \n");
 		secure_free(nomFichier);
@@ -669,14 +784,13 @@ void initData(int argc, char *argv[])
 
 	filters = createFilters();
 
-	
 	img_w = image->largeurImage;
 	img_h = image->hauteurImage;
 
 	matrice_bleue = new_u16_mat(img_w, img_h);
 	matrice_rouge = new_u16_mat(img_w, img_h);
 	matrice_verte = new_u16_mat(img_w, img_h);
-	if (!(matrice_verte[img_w - 1])) exit(-1); // check last alloc
+	if (!(matrice_verte[img_h - 1])) exit(-1); // check last alloc
 	
 }
 

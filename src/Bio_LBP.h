@@ -1,6 +1,6 @@
 ﻿// Adrien Bertrand
 // Biométrie - LBP
-// v1.20 - 25/02/2014
+// v1.3 - 28/02/2014
 
 #ifndef __BIO_LBP_H__
 #define __BIO_LBP_H__
@@ -32,10 +32,17 @@ typedef enum _feature_type_t {
 	feat_VOID // nothing (placeholder).
 } feature_type_t;
 
+typedef struct _face_feat_t {
+	uint x, y;
+	uint size;
+	feature_type_t type;
+} face_feat_t;
+
+// not using the above struct, I know and it's "normal".
 typedef struct _histo_model_t {
 	uint* histo;
 	feature_type_t type;
-	uint reliability;
+	uint distance;
 	uint x, y;
 } histo_model_t;
 
@@ -54,6 +61,16 @@ const uint histo_ownImage_db_size = 4; // 4 feat types
 typedef struct _rect_t {
 	uint x, y, w, h;
 } rect_t;
+
+typedef struct _point_t {
+	uint x, y;
+} point_t;
+
+
+_inline unsigned long int getIfromXYinImage(DonneesImageRGB* img, uint x, uint y) {
+	return (x < (uint)image->largeurImage && y < (uint)image->hauteurImage) ? (3 * (x + y * image->largeurImage)) : -1; // not a mistake
+}
+
 
 /*** Prototypes ***/
 
@@ -148,7 +165,7 @@ void do_PaletteReduction(int level);
 
 u16** get_subimage(u16** src, int src_w, int src_h, int x, int y, int w, int h);
 
-uint extract_subimages_and_compare(u16** image_ng, int width, int height);
+face_feat_t* extract_subimages_and_compare(u16** image_ng, int width, int height);
 
 /**
 * \brief	Initialise les données de base

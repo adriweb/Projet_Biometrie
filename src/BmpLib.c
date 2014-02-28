@@ -11,6 +11,7 @@
 #include <string.h>
 #include "BmpLib.h"
 #include "OutilsLib.h"
+#include "common.h"
 
 #ifndef NULL
 #define NULL ((void*)0)
@@ -27,10 +28,9 @@ void libereDonneesImageRGB(DonneesImageRGB **structure)
 		if
 			(*structure != NULL)
 		{
-			free((*structure)->donneesRGB);
-			free(*structure);
+			secure_free((*structure)->donneesRGB);
+			secure_free(*structure);
 		}
-		*structure = NULL;
 	}
 }
 

@@ -1,6 +1,6 @@
 // Adrien Bertrand
 // Biométrie - LBP
-// v1.20 - 25/02/2014
+// v1.3 - 28/02/2014
 
 #include "filtering.h"
 
@@ -72,13 +72,13 @@ int getMedian(int* arr, uint n)
 }
 #undef ELEM_SWAP
 
-void reNormalize(int** imageNG)
+void reNormalize(int** imageNG, int imgw, int imgh)
 {
 	int min = INT_MAX, max = INT_MIN, val;
 	double ratio = 0.0;
 	int i, j;
-	for (j = 0; j < img_h; j++) {
-		for (i = 0; i < img_w; i++) {
+	for (j = 0; j < imgh; j++) {
+		for (i = 0; i < imgw; i++) {
 			val = imageNG[j][i];
 			if (val < min) min = val;
 			if (val > max) max = val;
@@ -87,14 +87,14 @@ void reNormalize(int** imageNG)
 
 	ratio = ((double)255) / (max - min);
 
-#pragma omp parallel for
-	for (j = 0; j < img_h; j++)
-		for (i = 0; i < img_w; i++)
+// //#pragma omp parallel for
+	for (j = 0; j < imgh; j++)
+		for (i = 0; i < imgw; i++)
 			imageNG[j][i] = (int)((imageNG[j][i]-min) * ratio);
 
 }
 
-u16** apply_filter(u16** src, filter_t* filter)
+u16** do_apply_filter(u16** src, filter_t* filter, int imgw, int imgh)
 {
 	int filter_size = filter->size;
 
@@ -102,7 +102,7 @@ u16** apply_filter(u16** src, filter_t* filter)
 		error("Erreur : le filtre n'est pas de taille impaire !\n");
 		return NULL;
 	}
-	if (filter_size > img_w) {
+	if (filter_size > imgw) {
 		error("Erreur : le filtre est plus grand que l'image source !\n");
 		return NULL;
 	}
@@ -121,10 +121,10 @@ u16** apply_filter(u16** src, filter_t* filter)
 		if (!median_array) return NULL;
 	}
 
-	imageNG = (int**)malloc(img_h * sizeof(int*));
+	imageNG = (int**)malloc(imgh * sizeof(int*));
 	if (!imageNG) return NULL;
-	for (j = 0; j < img_h; j++) {
-		imageNG[j] = (int*)calloc(img_w, sizeof(int));
+	for (j = 0; j < imgh; j++) {
+		imageNG[j] = (int*)calloc(imgw, sizeof(int));
 		if (!imageNG[j]) return NULL;
 	}
 
@@ -134,8 +134,8 @@ u16** apply_filter(u16** src, filter_t* filter)
 
 	switch (filter->method) {
 	case flt_m_LBP:
-		for (j = offset; j < img_h - offset; j++)
-		for (i = offset, tmp = 0; i < img_w - offset; i++, tmp = 0) {
+		for (j = offset; j < imgh - offset; j++)
+		for (i = offset, tmp = 0; i < imgw - offset; i++, tmp = 0) {
 			tmp_lbp = (int)(src[j][i]);
 			for (y = -offset; y <= offset; y++)
 			for (x = -offset; x <= offset; x++) 
@@ -145,8 +145,8 @@ u16** apply_filter(u16** src, filter_t* filter)
 		}
 		break;
 	case flt_m_Median:
-		for (j = offset; j < img_h - offset; j++)
-		for (i = offset, median_array_idx = 0; i < img_w - offset; i++, median_array_idx = 0) {
+		for (j = offset; j < imgh - offset; j++)
+		for (i = offset, median_array_idx = 0; i < imgw - offset; i++, median_array_idx = 0) {
 			for (y = -offset; y <= offset; y++)
 			for (x = -offset; x <= offset; x++)
 				median_array[median_array_idx++] = (int)(src[j + y][x + i]);
@@ -155,34 +155,39 @@ u16** apply_filter(u16** src, filter_t* filter)
 		secure_free(median_array);
 		break;
 	default:
-#pragma omp parallel for
-		for (j = offset; j < img_h - offset; j++)
-		for (i = offset, tmp = 0; i < img_w - offset; i++)
+//#pragma omp parallel for
+		for (j = offset; j < imgh - offset; j++)
+		for (i = offset, tmp = 0; i < imgw - offset; i++)
 			imageNG[j][i] = src[j][i];
 		break;
 	}
 
 	if (filter->method == flt_m_LBP)
-		reNormalize(imageNG);
+		reNormalize(imageNG, imgw, imgh);
 
-	imageNG_16 = (u16**)malloc(img_h * sizeof(u16*));
+	imageNG_16 = (u16**)malloc(imgh * sizeof(u16*));
 	if (!imageNG_16) return NULL;
-	for (j = 0; j < img_h; j++) {
-		imageNG_16[j] = (u16*)calloc(img_w, sizeof(u16));
+	for (j = 0; j < imgh; j++) {
+		imageNG_16[j] = (u16*)calloc(imgw, sizeof(u16));
 		if (!imageNG_16[j]) return NULL;
-#pragma omp parallel for
-		for (i = 0; i < img_w; i++)
+//#pragma omp parallel for
+		for (i = 0; i < imgw; i++)
 			imageNG_16[j][i] = (u16)imageNG[j][i];
 	}
 
-//#pragma omp parallel for
-//	for (j = 0; j < img_h; j++)
+////#pragma omp parallel for
+//	for (j = 0; j < imgh; j++)
 //		secure_free(imageNG[j]);
 	secure_free(imageNG);
 
 // TODO : fix that ! (free -> crash...)
 
 	return imageNG_16;
+}
+
+u16** apply_filter(u16** src, filter_t* filter)
+{
+	return do_apply_filter(src, filter, img_w, img_h);
 }
 
 void mask_copy_3(int** dest, int src[3][3])

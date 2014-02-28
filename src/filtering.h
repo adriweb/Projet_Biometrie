@@ -1,6 +1,6 @@
 // Adrien Bertrand
 // Biométrie - LBP
-// v1.20 - 25/02/2014
+// v1.3 - 28/02/2014
 
 #ifndef __FILTERING_H__
 #define __FILTERING_H__
@@ -51,10 +51,13 @@ void freeFilter(filter_t* flt);
 * \return   Pointeur vers la nouvelle image (matricielle) en niveau de gris, traitée (avec le filtre)
 */
 u16** apply_filter(u16** src, filter_t* filter);
+u16** do_apply_filter(u16** src, filter_t* filter, int imgw, int imgh);
 
 void mask_copy_3(int** dest, int src[3][3]);
 void mask_copy_5(int** dest, int src[5][5]);
 void matrix_copy(int** dest, int** src, uint cols, uint rows);
+
+void do_reNormalize(int** imageNG, int imgw, int imgh);
 
 /**
 * \brief	Crée le tableau des filtres de base.
@@ -62,6 +65,4 @@ void matrix_copy(int** dest, int** src, uint cols, uint rows);
 * \return   Pointeur vers le tableau
 */
 filter_t** createFilters(void);
-
-
 #endif
