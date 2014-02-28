@@ -13,6 +13,7 @@
 #include <locale.h>
 #include <time.h>
 #include <errno.h>
+#include <limits.h>
 #include "BmpLib.h"
 
 #define IS_DEBUG	1
@@ -33,12 +34,6 @@ typedef u16**	img_gris;
 
 typedef char*	string; // for the lulz
 
-// just in case (Mac OS X doesn't have those by default, on QT Creator at least)
-#ifndef INT_MIN
-#define INT_MIN     (-2147483647 - 1)   /* minimum (signed) int value */
-#define INT_MAX       2147483647        /* maximum (signed) int value */
-#endif
-
 
 /**
 * \brief	no-VS compatibility stuff ("secure" functions)
@@ -47,9 +42,8 @@ typedef char*	string; // for the lulz
 #define scanf_s				scanf
 #define gets_s(a,b)			gets((a))
 #define strcpy_s(a,b,c)		strncpy((a),(c),(b))
-#define sprintf_s(a,b,c)	snprintf((a),(b),(c))
+#define sprintf_s(...)		snprintf(__VA_ARGS__)
 #define MAIN_NAME			main
-#define __inline			inline
 #endif
 
 #define NUMARGS(...)  (sizeof((int[]){__VA_ARGS__})/sizeof(int))

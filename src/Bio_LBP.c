@@ -36,6 +36,9 @@ histo_ownImage_t* histo_ownImage_db;
 
 /*  --------- Fonctions ---------  */
 
+unsigned long int getIfromXYinImage(DonneesImageRGB* img, uint x, uint y) {
+	return (x < (uint)image->largeurImage && y < (uint)image->hauteurImage) ? (3 * (x + y * image->largeurImage)) : (unsigned long int)(-1);
+}
 
 void cree3matrices(u16** mat_bleue, u16** mat_rouge, u16** mat_verte, DonneesImageRGB* image) {
 	int i, j, k = 0;
@@ -340,7 +343,6 @@ uint make_histo_db(void)
 			if (!(tmp_mat_vert[modele_h - 1])) return 0;
 			
 			cree3matrices(tmp_mat_bleu, tmp_mat_rouge, tmp_mat_vert, tmp_img_rgb);
-			if (tmp_img_ng) secure_free(tmp_img_ng);
 			tmp_img_ng = do_couleur2NG(tmp_mat_bleu, tmp_mat_rouge, tmp_mat_vert, false, modele_w, modele_h);
 
 			free_u16_mat(tmp_mat_bleu, modele_h);
@@ -349,6 +351,9 @@ uint make_histo_db(void)
 
 			histo_models_db[idx].histo = do_histogramme(tmp_img_ng, modele_w, modele_h);
 			histo_models_db[idx].type = (feature_type_t)i;
+
+			if (tmp_img_ng) secure_free(tmp_img_ng);
+
 			debugPrint("- %s\t histo saved it into : histo_db[%u] (%p)\n", feature_fileName, idx, &(histo_models_db[i]));
 			if (!(histo_models_db[idx].histo)) {
 				error("*** histo_db[%u].histo is NULL ! Going to the next element overwriting histo_db[%d] ... ***\n", idx, idx);
@@ -363,8 +368,6 @@ uint make_histo_db(void)
 	
 	secure_free(feature_fileName);
 	secure_free(feature_dirName);
-
-	free_u16_mat(tmp_img_ng, modele_h);
 	
 	libereDonneesImageRGB(&tmp_img_rgb);
 

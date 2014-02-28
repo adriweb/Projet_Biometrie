@@ -67,11 +67,6 @@ typedef struct _point_t {
 } point_t;
 
 
-_inline unsigned long int getIfromXYinImage(DonneesImageRGB* img, uint x, uint y) {
-	return (x < (uint)image->largeurImage && y < (uint)image->hauteurImage) ? (3 * (x + y * image->largeurImage)) : -1; // not a mistake
-}
-
-
 /*** Prototypes ***/
 
 /**
