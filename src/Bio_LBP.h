@@ -1,6 +1,6 @@
 ﻿// Adrien Bertrand
 // Biométrie - LBP
-// v1.4 - 07/03/2014
+// v1.5 - 12/03/2014
 
 #ifndef __BIO_LBP_H__
 #define __BIO_LBP_H__
@@ -57,18 +57,6 @@ extern uint histo_db_size;
 extern histo_ownImage_t* histo_ownImage_db;
 const uint features_per_face = 4; // 4 feat types
 const uint magic_max_distance_value = 3000; // maybe find a better value.
-
-/**
-* \brief	Simple rectangle défini par son sommet en haut à gauche, et ses dimensions
-*/
-typedef struct _rect_t {
-	uint x, y, w, h;
-} rect_t;
-typedef rect_t face_rect_t;
-
-typedef struct _point_t {
-	uint x, y;
-} point_t;
 
 
 /*** Prototypes ***/

@@ -34,4 +34,7 @@ void changeDirectory(const string name);
 
 uint* readHistoFromFile(const string filename);
 int writeHistoToFile(const string filename, uint* histo);
+
+bool checkRectIntersect(rect_t* RectA, rect_t* RectB);
+
 #endif

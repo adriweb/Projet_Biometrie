@@ -1,6 +1,6 @@
 ﻿// Adrien Bertrand
 // Biométrie - LBP
-// v1.4 - 07/03/2014
+// v1.5 - 12/03/2014
 
 #include "Bio_LBP.h"
 #include "filtering.h"
@@ -542,7 +542,7 @@ face_feat_t* extract_subimages_and_compare(u16** image_ng, uint width, uint heig
 		if (face_features[k].distance < lowestDistanceIdx) lowestDistanceIdx = k;
 	}
 
-	printf("name : %s\n", histo_ownImage_db[lowestDistanceIdx].feat.name);
+	//printf("name : %s\n", histo_ownImage_db[lowestDistanceIdx].feat.name);
 	strcpy(face_features->name, histo_ownImage_db[lowestDistanceIdx].feat.name);
 
 
@@ -711,7 +711,7 @@ void choixAction(int choix)
 			printf("******************************\n");
 			printf("**** Bertrand - Debournoux ***\n");
 			printf("******* Biometrie - LBP ******\n");
-			printf("***** v1.4 - 07/03/2014 *****\n");
+			printf("***** v1.5 - 12/03/2014 *****\n");
 			printf("******************************\n\n");
 			printf("Image en cours : %s\n\n", nomFichier);
 			printf("******************************\n\n");
@@ -740,27 +740,45 @@ void choixAction(int choix)
 			debugPrint("Detection de visage :  niveau-de-gris > mediane > lbp > sous-images > histogrammes > comparaison avec modeles > deductions \n");
 			tmp_ng1 = apply_filter(image_ng, filters[flt_LBP]);
 			if (histo_db_size == 0) histo_db_size = make_histo_db();
+			bool skipNeeded;
+			uint falsePositives = 0;
 			do {
+				skipNeeded = false;
 				badFeaturesCount = 0;
 				currently_detected_face = extract_subimages_and_compare(tmp_ng1, img_w, img_h, alreadyDetectedFaces, detectionsCount);
 				for (i = 0; i < features_per_face; i++) {
 					if (currently_detected_face[i].distance > magic_max_distance_value)
 						badFeaturesCount++;
 				}
-				debugPrint("badFeaturesCount : %u\n", badFeaturesCount);
 				if (badFeaturesCount <= 2) {
-					detectionsCount++;
 
 					rect_t currFace = getFaceRectFromFeatures(currently_detected_face);
+
+					if (alreadyDetectedFaces) {
+						for (i = 0; i < detectionsCount; i++)
+						{
+							if (checkRectIntersect(&currFace, &(alreadyDetectedFaces[i]))) {
+								debugPrint("face intersection detected - skipping.\n");
+								falsePositives++;
+								skipNeeded = true;
+								break;
+							}
+						}
+					}
+
+					detectionsCount++;
+
 					alreadyDetectedFaces = realloc(alreadyDetectedFaces, detectionsCount * sizeof(rect_t));
 					alreadyDetectedFaces[detectionsCount - 1] = currFace;
 
-					debugPrint("Marking detected face features on image.\n");
+					if (skipNeeded) continue;
+
+					debugPrint("Marking detected face on image.\n");
 					mark_face_features(img_with_faces, currently_detected_face);
-					printf("Detected face #%u (%s ?) ...\n", detectionsCount, currently_detected_face->name);
+					printf("Detected face #%u (looks like model #%s)...\n", detectionsCount, currently_detected_face->name);
 				}
 			} while (detectionsCount < 50 && badFeaturesCount <= 2);
-			printf("Detection finished : %u faces.\n", detectionsCount);
+			printf("Detection finished : %u face(s).\n\n", detectionsCount - falsePositives);
 			break;
 
 		case 0:
@@ -778,7 +796,6 @@ void choixAction(int choix)
 		if (tmp_ng2) free_u16_mat(tmp_ng2, img_h);
 		if (tmp_ng3) free_u16_mat(tmp_ng3, img_h);
 		if (alreadyDetectedFaces) secure_free(alreadyDetectedFaces);
-		// todo : fix crash on this free  ^
 
 		libereDonneesImageRGB(&histo_img);
 		libereDonneesImageRGB(&tmp_img);
@@ -837,10 +854,8 @@ void initData(int argc, char *argv[])
 
 void freeStuff(void)
 {
-
-	// todo : free histo_models_db et histo_ownImage_db
-
 	int i;
+
 	for (i = 0; i < NBR_FILTRES; i++)
 		freeFilter(filters[i]);
 	secure_free(filters);

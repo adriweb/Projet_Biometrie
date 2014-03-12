@@ -1,4 +1,5 @@
 #include "utils.h"
+#include "common.h"
 
 // Useful stuff :
 
@@ -133,6 +134,12 @@ void changeDirectory(const string name)
 	char* cwd = getCurrentDirectory();
 	//debugPrint("changed directory : %s\n", cwd);
 	secure_free(cwd);
+}
+
+bool checkRectIntersect(rect_t* RectA, rect_t* RectB)
+{
+	return RectA->x < (RectB->x + RectB->w) && (RectA->x + RectA->w) > RectB->x
+		&& RectA->y < (RectB->y + RectB->h) && (RectA->y + RectA->h) > RectB->y;
 }
 
 uint* readHistoFromFile(const string filename)
