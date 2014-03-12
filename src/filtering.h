@@ -1,6 +1,6 @@
 // Adrien Bertrand
 // Biométrie - LBP
-// v1.3 - 28/02/2014
+// v1.4 - 07/03/2014
 
 #ifndef __FILTERING_H__
 #define __FILTERING_H__

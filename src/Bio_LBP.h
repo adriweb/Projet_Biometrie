@@ -1,6 +1,6 @@
 ﻿// Adrien Bertrand
 // Biométrie - LBP
-// v1.3 - 28/02/2014
+// v1.4 - 07/03/2014
 
 #ifndef __BIO_LBP_H__
 #define __BIO_LBP_H__
@@ -35,15 +35,17 @@ typedef enum _feature_type_t {
 typedef struct _face_feat_t {
 	uint x, y;
 	uint size;
+	uint distance;
 	feature_type_t type;
+	char name[64]; // recognized person 
 } face_feat_t;
+
 
 // not using the above struct, I know and it's "normal".
 typedef struct _histo_model_t {
 	uint* histo;
-	feature_type_t type;
-	uint distance;
-	uint x, y;
+	face_feat_t feat;
+	char name[64]; // recognized person, from file name
 } histo_model_t;
 
 typedef histo_model_t	histo_ownImage_t;
@@ -53,7 +55,8 @@ extern histo_model_t*	histo_models_db;
 extern uint histo_db_size;
 
 extern histo_ownImage_t* histo_ownImage_db;
-const uint histo_ownImage_db_size = 4; // 4 feat types
+const uint features_per_face = 4; // 4 feat types
+const uint magic_max_distance_value = 3000; // maybe find a better value.
 
 /**
 * \brief	Simple rectangle défini par son sommet en haut à gauche, et ses dimensions
@@ -61,6 +64,7 @@ const uint histo_ownImage_db_size = 4; // 4 feat types
 typedef struct _rect_t {
 	uint x, y, w, h;
 } rect_t;
+typedef rect_t face_rect_t;
 
 typedef struct _point_t {
 	uint x, y;
@@ -160,7 +164,7 @@ void do_PaletteReduction(int level);
 
 u16** get_subimage(u16** src, int src_w, int src_h, int x, int y, int w, int h);
 
-face_feat_t* extract_subimages_and_compare(u16** image_ng, int width, int height);
+face_feat_t* extract_subimages_and_compare(u16** image_ng, uint width, uint height, rect_t* previousDetections, uint prevDetectionsCount);
 
 /**
 * \brief	Initialise les données de base

@@ -1,13 +1,10 @@
 ﻿// Adrien Bertrand
 // Biométrie - LBP
-// v1.3 - 28/02/2014
+// v1.4 - 07/03/2014
 
 #include "Bio_LBP.h"
 #include "filtering.h"
 #include "utils.h"
-
-
-// TODO : check distance between face features to make sure it's a face.
 
 
 /*  --------- Petites variables globales et pointeurs globaux ---------  */
@@ -350,7 +347,12 @@ uint make_histo_db(void)
 			free_u16_mat(tmp_mat_vert, modele_h);
 
 			histo_models_db[idx].histo = do_histogramme(tmp_img_ng, modele_w, modele_h);
-			histo_models_db[idx].type = (feature_type_t)i;
+			histo_models_db[idx].feat.type = (feature_type_t)i;
+
+			string tmpName = (string)calloc(60, sizeof(char));
+			sprintf(tmpName, "%u", sample); // meh.
+			strcpy(histo_models_db[idx].name, tmpName);
+			secure_free(tmpName);
 
 			if (tmp_img_ng) secure_free(tmp_img_ng);
 
@@ -410,14 +412,15 @@ histo_ownImage_t* compare_histo_with_models(uint* histo)
 	if (!match) return NULL;
 
 	match->histo = histo;
-	match->distance = UINT_MAX;
-	match->type = feat_VOID;
+	match->feat.distance = UINT_MAX;
+	match->feat.type = feat_VOID;
 	
 	for (i = 0; i < histo_db_size; i++) {
 		tmp = compare_two_histograms(histo_models_db[i].histo, histo);
-		if (tmp < match->distance) {
-			match->distance = tmp;
-			match->type = histo_models_db[i].type;
+		if (tmp < match->feat.distance) {
+			match->feat.distance = tmp;
+			match->feat.type = histo_models_db[i].feat.type;
+			strcpy(match->name, histo_models_db[i].name);
 		}
 	}
 
@@ -441,17 +444,19 @@ u16** get_subimage(u16** src, int src_w, int src_h, int x, int y, int w, int h)
 	return sub;
 }
 
-face_feat_t* extract_subimages_and_compare(u16** image_ng, int width, int height)
+face_feat_t* extract_subimages_and_compare(u16** image_ng, uint width, uint height, rect_t* previousDetections, uint prevDetectionsCount)
 {
-	int i, j;
+	uint i, j;
 	uint k;
+
+	bool skip = false;
 
 	face_feat_t* face_features = NULL;
 
 	histo_ownImage_t* tmp = NULL;
 	uint nbr_sub = 5;
 	uint sub_size = (uint)roundf(((float)(width<height ? width : height) / (float)nbr_sub));
-	int loop_step = sub_size >> 2; // génération d'une sous-image à chaque taille/2.
+	uint loop_step = sub_size >> 2; // génération d'une sous-image à chaque taille/2.
 
 	u16** sub = NULL;
 	uint* sub_histo = NULL;
@@ -462,68 +467,86 @@ face_feat_t* extract_subimages_and_compare(u16** image_ng, int width, int height
 	DonneesImageRGB* sub_histo_img = NULL;
 
 	// calloc so that every field is set to 0
-	histo_ownImage_db = (histo_ownImage_t*)calloc(histo_ownImage_db_size, sizeof(histo_ownImage_t));
+	histo_ownImage_db = (histo_ownImage_t*)calloc(features_per_face, sizeof(histo_ownImage_t));
 	if (!histo_ownImage_db) return 0;
-	for (k = 0; k < histo_ownImage_db_size; k++) {
+	for (k = 0; k < features_per_face; k++) {
 		if (!(histo_ownImage_db[k].histo = new_histo()))
 			return 0;
-		histo_ownImage_db[k].distance = UINT_MAX;
+		histo_ownImage_db[k].feat.distance = UINT_MAX;
+		histo_ownImage_db[k].feat.x = 0;
+		histo_ownImage_db[k].feat.y = 0;
 	}
 
+	face_features = (face_feat_t*)calloc(features_per_face, sizeof(face_feat_t));
+	for (k = 0; k < features_per_face; k++)
+		face_features[k].distance = UINT_MAX;
+	
 	for (j = 0; j < height - 2*loop_step; j += loop_step) {
 		for (i = 0; i < width - 2*loop_step; i += loop_step) {
 
+			for (k = 0; k < prevDetectionsCount && !skip; k++)
+				skip = (i >= previousDetections[k].x && i <= (previousDetections[k].x + previousDetections[k].w) &&
+						j >= (previousDetections[k].y - previousDetections[k].h / 1.75) && j <= (previousDetections[k].y + previousDetections[k].h*1.75));
+
+			if (skip) {
+				skip = false;
+				continue;
+			}
+
 			sub = get_subimage(image_ng, width, height, i, j, sub_size, sub_size);
 			if (!sub) return NULL;
-
-			//sprintf(sub_filename, "%s_sub_%d_%d_%u.bmp", nomFichier, j, i, sub_size);
-			//sauveImageNG(dest_imgRGB, sub);
-			//ecrisBMPRGB_Dans(dest_imgRGB, sub_filename);
-
-			sub_histo = do_histogramme(sub, sub_size, sub_size);
 			
+			sub_histo = do_histogramme(sub, sub_size, sub_size);
 			tmp = compare_histo_with_models(sub_histo);
-
-			if (tmp->type != feat_VOID) {
-				if (tmp->distance < histo_ownImage_db[(int)tmp->type].distance) {
+			if (tmp->feat.type != feat_VOID) {
+				if (!skip && tmp->feat.distance < magic_max_distance_value && tmp->feat.distance < histo_ownImage_db[(int)tmp->feat.type].feat.distance) {
 					//debugPrint("found better match of type %d (score : %u)!\n", tmp->type, tmp->reliability);
-					memcpy(histo_ownImage_db[(int)tmp->type].histo, tmp->histo, GRAYLEVELS*sizeof(uint));
-					histo_ownImage_db[(int)tmp->type].distance = tmp->distance;
-					histo_ownImage_db[(int)tmp->type].type = tmp->type;
-					histo_ownImage_db[(int)tmp->type].x = i;
-					histo_ownImage_db[(int)tmp->type].y = j;
+					memcpy(histo_ownImage_db[(int)tmp->feat.type].histo, tmp->histo, GRAYLEVELS*sizeof(uint));
+					histo_ownImage_db[(int)tmp->feat.type].feat.distance = tmp->feat.distance;
+					histo_ownImage_db[(int)tmp->feat.type].feat.type = tmp->feat.type;
+					histo_ownImage_db[(int)tmp->feat.type].feat.x = i;
+					histo_ownImage_db[(int)tmp->feat.type].feat.y = j;
+					strcpy(histo_ownImage_db[(int)tmp->feat.type].feat.name, tmp->name);
 				}
 			}
 
 			secure_free(sub_histo);
 			libereDonneesImageRGB(&sub_histo_img);
-
 			free_u16_mat(sub, sub_size);
 		}
 	}
 
 	string features_tmp[] = { "bouche", "nez", "oeild", "oeilg" };
 
-	printf("Best matches saved.\n");
-	for (k = 0; k < histo_ownImage_db_size; k++) {
-		i = histo_ownImage_db[k].x;
-		j = histo_ownImage_db[k].y;
-		debugPrint("At (%u,%u) : type %u (score : %u)\n", i, j, histo_ownImage_db[k].type, histo_ownImage_db[k].distance);
-		sub = get_subimage(image_ng, width, height, i, j, sub_size, sub_size);
-		sprintf(sub_filename, "%s_%s.bmp", nomFichier, features_tmp[histo_ownImage_db[k].type]);
-		sauveImageNG(dest_imgRGB, sub);
-		ecrisBMPRGB_Dans(dest_imgRGB, sub_filename);
+	for (k = 0; k < features_per_face; k++) {
+		i = histo_ownImage_db[k].feat.x;
+		j = histo_ownImage_db[k].feat.y;
+		debugPrint("At (%u,%u) :\t%s\tscore: %u\n", i, j, features_tmp[histo_ownImage_db[k].type], histo_ownImage_db[k].distance);
+		
+		if (histo_ownImage_db[k].feat.distance < magic_max_distance_value && prevDetectionsCount == 0) {
+			sub = get_subimage(image_ng, width, height, i, j, sub_size, sub_size);
+			sprintf(sub_filename, "%s_%s.bmp", nomFichier, features_tmp[histo_ownImage_db[k].feat.type]);
+			sauveImageNG(dest_imgRGB, sub);
+			ecrisBMPRGB_Dans(dest_imgRGB, sub_filename);
+			free_u16_mat(sub, sub_size);
+		}
 	}
 
-	face_features = (face_feat_t*)calloc(histo_ownImage_db_size, sizeof(face_feat_t));
-	for (k = 0; k < histo_ownImage_db_size; k++) {
+	uint lowestDistanceIdx = 0;
+	for (k = 0; k < features_per_face; k++) {
 		face_features[k].size = sub_size;
-		face_features[k].type = histo_ownImage_db[k].type;
-		face_features[k].x = histo_ownImage_db[k].x;
-		face_features[k].y = histo_ownImage_db[k].y;
+		face_features[k].type = histo_ownImage_db[k].feat.type;
+		face_features[k].x = histo_ownImage_db[k].feat.x;
+		face_features[k].y = histo_ownImage_db[k].feat.y;
+		face_features[k].distance = histo_ownImage_db[k].feat.distance;
+		if (face_features[k].distance < lowestDistanceIdx) lowestDistanceIdx = k;
 	}
 
-	for (k = 0; k < histo_ownImage_db_size; k++)
+	printf("name : %s\n", histo_ownImage_db[lowestDistanceIdx].feat.name);
+	strcpy(face_features->name, histo_ownImage_db[lowestDistanceIdx].feat.name);
+
+
+	for (k = 0; k < features_per_face; k++)
 		secure_free(histo_ownImage_db[k].histo);
 	secure_free(histo_ownImage_db);
 
@@ -594,50 +617,62 @@ void drawRectangleOnImage(const rect_t* rect, DonneesImageRGB* img)
 	drawLineOnImage(rect->x + rect->w, rect->y, rect->x + rect->w, rect->y + rect->h, img); // right
 }
 
-void mark_face_features(DonneesImageRGB* image_orig, face_feat_t* face_features)
+rect_t getFaceRectFromFeatures(face_feat_t* face_features)
 {
-	uint k;
-	uint xmin, ymin, xmax, ymax;
-
-	rect_t tmp_rect, face_rect;
-	string fileName = NULL;
-	DonneesImageRGB* img = NULL;
-	
-	img = clone_imageRGB(image_orig);
-	if (!img) return;
-
+	rect_t face_rect;
+	int xmin, xmax, ymin, ymax, xtmp, ytmp;
 	xmin = ymin = UINT_MAX;
 	xmax = ymax = 0;
 
-	for (k = 0; k < histo_ownImage_db_size; k++) {
-		if (face_features[k].x == 0 && face_features[k].y == 0) {
+	uint k;
+	for (k = 0; k < features_per_face; k++) {
+		if (face_features[k].x < (uint)xmin) xmin = face_features[k].x;
+		if (face_features[k].y < (uint)ymin) ymin = face_features[k].y;
+		if (face_features[k].x > (uint)xmax) xmax = face_features[k].x;
+		if (face_features[k].y > (uint)ymax) ymax = face_features[k].y;
+
+		int size = face_features[0].size;
+		xtmp = xmin - (size >> 1);
+		ytmp = ymin - (uint)((double)size / 1.5);
+		face_rect.x = (xtmp < 0) ? 0 : xtmp;
+		face_rect.y = (ytmp < 0) ? 0 : ytmp;
+		face_rect.w = (xmax - xmin) + size * 2;
+		face_rect.h = (ymax - ymin) + (uint)(size * 2.5);
+	}
+
+	return face_rect;
+}
+
+void mark_face_features(DonneesImageRGB* src_img, face_feat_t* face_features)
+{
+	uint k;
+
+	rect_t tmp_rect, face_rect;
+	string fileName = NULL;
+
+	for (k = 0; k < features_per_face; k++) {
+
+		// debugPrint("x,y : %u,%u\n", face_features[k].x, face_features[k].y);
+
+		if (face_features[k].distance > magic_max_distance_value) {
 			debugPrint("ignoring a probably badly-detected feature (%d)\n", k);
 			continue;
 		}
 		tmp_rect = (rect_t){ face_features[k].x, face_features[k].y, face_features[k].size, face_features[k].size };
-		drawRectangleOnImage(&tmp_rect, img);
-		if (face_features[k].x < xmin) xmin = face_features[k].x;
-		if (face_features[k].y < ymin) ymin = face_features[k].y;
-		if (face_features[k].x > xmax) xmax = face_features[k].x;
-		if (face_features[k].y > ymax) ymax = face_features[k].y;
+		//drawRectangleOnImage(&tmp_rect, src_img);
 	}
 
-	int size = face_features[0].size;
-	face_rect.x = xmin - (size >> 1);
-	face_rect.y = ymin - (uint)((double)size/1.5);
-	face_rect.w = (xmax - xmin) + size * 2;
-	face_rect.h = (ymax - ymin) + (uint)(size * 2.5);
+	face_rect = getFaceRectFromFeatures(face_features);
 
-	drawRectangleOnImage(&face_rect, img);
+	drawRectangleOnImage(&face_rect, src_img);
 
 	fileName = (string)calloc(strlen(nomFichier) + 10, sizeof(char));
 	if (!fileName) return;
 
 	sprintf_s(fileName, strlen(nomFichier)+10, "%s_face.bmp", nomFichier);
-	ecrisBMPRGB_Dans(img, fileName);
+	ecrisBMPRGB_Dans(src_img, fileName);
 
 	secure_free(fileName);
-	libereDonneesImageRGB(&img);
 }
 
 void choixAction(int choix)
@@ -645,9 +680,18 @@ void choixAction(int choix)
 	static bool isDoingAll = false;
 	bool end = (choix == 0);
 
-	face_feat_t* face_features = NULL;
+	uint i;
+
+	face_feat_t* currently_detected_face = NULL;	// ptr
+	rect_t* alreadyDetectedFaces = NULL;			// array
+	DonneesImageRGB* img_with_faces = NULL;
+	uint detectionsCount = 0;
+	uint badFeaturesCount = 0;
 
 	while (!end) {
+
+		img_with_faces = clone_imageRGB(image_orig);
+		if (!img_with_faces) end = true;
 
 		cree3matrices(matrice_bleue, matrice_rouge, matrice_verte, image_orig);
 		image_ng = couleur2NG(matrice_bleue, matrice_rouge, matrice_verte, false);
@@ -667,17 +711,13 @@ void choixAction(int choix)
 			printf("******************************\n");
 			printf("**** Bertrand - Debournoux ***\n");
 			printf("******* Biometrie - LBP ******\n");
-			printf("***** v1.3 - 28/02/2014 *****\n");
+			printf("***** v1.4 - 07/03/2014 *****\n");
 			printf("******************************\n\n");
 			printf("Image en cours : %s\n\n", nomFichier);
 			printf("******************************\n\n");
 			printf("(Un filtre median est fait avant toute chose)\n");
-			printf("* 1) LBP \n");
-			printf("* 2) Filtre median seul \n");
-			printf("* 3) Histogramme (image + bin)\n");
-			printf("* 4) Détection de visage(s) \n");
-			printf("* 5) LBP + Extractions sous-images + Histo \n");
-			printf("* 10) Init Models DB \n");
+			printf("* 1) Enregister le LBP \n");
+			printf("* 2) Détection de visage(s) \n");
 			printf("* 0) Quitter \n\n");
 			printf("******************************\n");
 			printf("Choix ? \n");
@@ -694,42 +734,39 @@ void choixAction(int choix)
 			sauveImageNG(image, tmp_ng1);
 			saveBMPwithCurrentName(image, "lbp-with-median.bmp");
 			break;
-		case 2: // median test
-			sauveImageNG(image, image_ng);
-			saveBMPwithCurrentName(image, "median.bmp");
-			break;
-		case 3:
-			histo = histogramme(image_ng);
-			histo_img = imageHistogramme(histo);
-			
-			saveBMPwithCurrentName(histo_img, "histogramme.bmp");
-
-			string binhisto_name = (string)calloc(strlen(nomFichier) + 15, sizeof(char));
-			if (!binhisto_name) { secure_free(histo); break; }
-			sprintf(binhisto_name, "%s_histo.bin", nomFichier);
-			writeHistoToFile(binhisto_name, histo);
-
-			secure_free(histo);
-			secure_free(binhisto_name);
-			break;
-		case 4:
+		
+		// TODO : check distance between face features to make sure it's a face.
+		case 2:
 			debugPrint("Detection de visage :  niveau-de-gris > mediane > lbp > sous-images > histogrammes > comparaison avec modeles > deductions \n");
-			break;
-		case 5:
 			tmp_ng1 = apply_filter(image_ng, filters[flt_LBP]);
 			if (histo_db_size == 0) histo_db_size = make_histo_db();
-			face_features = extract_subimages_and_compare(tmp_ng1, img_w, img_h);
-			debugPrint("Marking detected face features on image.\n");
-			mark_face_features(image_orig, face_features);
+			do {
+				badFeaturesCount = 0;
+				currently_detected_face = extract_subimages_and_compare(tmp_ng1, img_w, img_h, alreadyDetectedFaces, detectionsCount);
+				for (i = 0; i < features_per_face; i++) {
+					if (currently_detected_face[i].distance > magic_max_distance_value)
+						badFeaturesCount++;
+				}
+				debugPrint("badFeaturesCount : %u\n", badFeaturesCount);
+				if (badFeaturesCount <= 2) {
+					detectionsCount++;
+
+					rect_t currFace = getFaceRectFromFeatures(currently_detected_face);
+					alreadyDetectedFaces = realloc(alreadyDetectedFaces, detectionsCount * sizeof(rect_t));
+					alreadyDetectedFaces[detectionsCount - 1] = currFace;
+
+					debugPrint("Marking detected face features on image.\n");
+					mark_face_features(img_with_faces, currently_detected_face);
+					printf("Detected face #%u (%s ?) ...\n", detectionsCount, currently_detected_face->name);
+				}
+			} while (detectionsCount < 50 && badFeaturesCount <= 2);
+			printf("Detection finished : %u faces.\n", detectionsCount);
 			break;
-		case 10:
-			printf("Making Models DB ...\n");
-			histo_db_size = make_histo_db();
-			printf("DB OK. Number of elements : %d\n", histo_db_size);
-			break;
+
 		case 0:
 			end = true;
 			break;
+
 		default:
 			printf("Mauvais choix !\n\n");
 			break;
@@ -740,11 +777,12 @@ void choixAction(int choix)
 		if (tmp_ng1) free_u16_mat(tmp_ng1, img_h);
 		if (tmp_ng2) free_u16_mat(tmp_ng2, img_h);
 		if (tmp_ng3) free_u16_mat(tmp_ng3, img_h);
-		if (face_features) secure_free(face_features);
+		if (alreadyDetectedFaces) secure_free(alreadyDetectedFaces);
+		// todo : fix crash on this free  ^
 
 		libereDonneesImageRGB(&histo_img);
 		libereDonneesImageRGB(&tmp_img);
-
+		libereDonneesImageRGB(&img_with_faces);
 
 #ifdef CONSOLE
 		if (!isDoingAll) {

@@ -1,6 +1,6 @@
 // Adrien Bertrand
 // Biométrie - LBP
-// v1.3 - 28/02/2014
+// v1.4 - 07/03/2014
 
 #ifndef __COMMON_H__
 #define __COMMON_H__
@@ -16,7 +16,7 @@
 #include <limits.h>
 #include "BmpLib.h"
 
-#define IS_DEBUG	1
+//#define IS_DEBUG
 
 #define CONSOLE
 #ifdef CONSOLE
